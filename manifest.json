@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "NetAcad 习题答案获取助手",
+  "version": "1.2.0",
+  "description": "在 netacad.com 课程页显示习题参考答案",
+  "permissions": ["storage", "webRequest"],
+  "host_permissions": ["https://www.netacad.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "NetAcad 习题答案获取助手"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.netacad.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}
