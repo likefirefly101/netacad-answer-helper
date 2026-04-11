@@ -128,7 +128,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
   function ensureNetacadHighlightStylesInShadow(el) {
     try {
       if (!el) return;
-      /** 下拉等子 shadow 须用 el.shadowRoot */
+      // 子 shadow 注入样式
       let root = el.shadowRoot || null;
       if (!root) {
         const r = el.getRootNode && el.getRootNode();
@@ -146,9 +146,9 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       /* */
     }
   }
-  /** MCQ 高亮/映射：选项匹配分通过线 */
+  /** MCQ 选项匹配分阈值 */
   const MCQ_DOM_OPTION_MATCH_MIN = 0.52;
-  /** MCQ DOM↔JSON 选项初配通过线 */
+  /** MCQ DOM 与 JSON 初配阈值 */
   const MCQ_DOM_JSON_MAP_PAIR_MIN = 0.68;
 
   /** 是否计分题型组件 */
@@ -390,7 +390,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return s.normalize("NFKC").replace(/\s+/g, " ").trim();
   }
 
-  /** 可见题干 exact key（与选项同一套归一化） */
+  /** 可见题干 exact key */
   function stemUnifiedExactKeyFromVisibleStem(visibleStem) {
     return normalizeMcqOptionPlainForExactCompare(
       unifiedPlainFromVisibleStem(visibleStem)
@@ -658,7 +658,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return isInCourseChromeSidebar(el);
   }
 
-  /** 底部「2 的 3 问题」→ 当前第 2 题 */
+  /** 底部 "n 的 m 问题" 取当前 n */
   function extractZhNthOfMTotalProgressQuestion() {
     const parts = [];
     const push = (root) => {
@@ -1355,7 +1355,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     if (!correctDisplay) {
       correctDisplay = objectMatchingFeedbackPlain(componentInfo);
     }
-    // 组装 objectMatching 题干
+    // objectMatching 题干
     const 问题 =
       categoryHints.length > 0
         ? `${body}\n${categoryHints.join("\n")}`
@@ -2094,7 +2094,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return true;
   }
 
-  /** 从标题文案解析测验题号（问题 n / Qn） */
+  /** 标题文案解析题号 */
   function extractQuizOrdinalFromTitlePlain(plain) {
     if (plain == null) return null;
     const p = String(plain)
@@ -2118,13 +2118,13 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return null;
   }
 
-  /** 标题文案是否对应当前题号 */
+  /** 标题是否为题号 n */
   function titlePlainMatchesQuizOrdinal(plain, n) {
     if (plain == null || !Number.isFinite(n) || n < 1 || n >= 500) return false;
     return extractQuizOrdinalFromTitlePlain(plain) === n;
   }
 
-  /** MCQ 正文节点所属组件标题上的题号 */
+  /** MCQ 正文所属组件题号 */
   function quizOrdinalForMcqBodyInner(bodyEl) {
     if (!bodyEl) return null;
     const host =
@@ -2144,7 +2144,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return extractQuizOrdinalFromTitlePlain(plain);
   }
 
-  /** 题号对应的 is-question 宿主上的 data-socialgoodpulse-id（与 JSON _id 一致） */
+  /** is-question 宿主 data-socialgoodpulse-id，对齐 JSON _id */
   function extractDomSocialGoodPulseIdForQuizOrdinal(ordinalStr) {
     const n = parseInt(String(ordinalStr).trim(), 10);
     if (!Number.isFinite(n) || n < 1 || n >= 500) return null;
@@ -2195,7 +2195,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return bestId;
   }
 
-  /** 用 DOM 组件 id 在 pool 中找唯一一行 */
+  /** pool 内按 componentId 命中一行 */
   function findPoolRowByComponentDomId(ordinalStr, pool) {
     const cid = extractDomSocialGoodPulseIdForQuizOrdinal(ordinalStr);
     if (!cid || !pool || !pool.length) return null;
@@ -2208,7 +2208,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return null;
   }
 
-  /** 按「问题 n」标题在附近 scope 取题干 */
+  /** 按标题 "问题 n" 在 scope 取题干 */
   function stemTextAnchoredByProblemTitle(n) {
     if (!Number.isFinite(n) || n < 1 || n >= 500) return null;
     const titleSels = [
@@ -2343,7 +2343,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return best;
   }
 
-  /** MCQ 题干区（inner / body 外壳）视口内最大可见面积 */
+  /** MCQ 题干区视口内最大可见面积 */
   function maxMcqBodyInnerVisibleArea() {
     let best = 0;
     const nodes = querySelectorAllDeep(
@@ -2358,7 +2358,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return best;
   }
 
-  /** matching 宿主内聚合说明与各行特征为一段题干 */
+  /** matching 宿主拼成一段题干 */
   function collectAggregatedMatchingLikeStemFromHost(mvHost) {
     if (!mvHost || isInOurPanel(mvHost) || !domElLikelyRenderedForUser(mvHost))
       return null;
@@ -2418,7 +2418,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return null;
   }
 
-  /** 当前屏可见 MCQ / matching 题干文本 */
+  /** 当前屏题干文本 */
   function getVisibleMcqStemText(hintOrdinal) {
     const hn =
       hintOrdinal != null ? parseInt(String(hintOrdinal).trim(), 10) : NaN;
@@ -2767,7 +2767,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       const want = parseInt(titleOrd, 10);
       if (Number.isFinite(want) && want > 0) {
         if (stripMaxN >= 1 && want > stripMaxN) {
-          // 超顶栏题号丢弃
+          // 超顶栏丢弃
         } else {
           const hits = strip.filter((r) => r.n === want);
           if (hits.length === 1) return capOrdinalStringByTopStripQNav(String(want));
@@ -2875,7 +2875,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     const block = getActiveLessonBlockQOrdinal();
     if (block != null) return { ordinal: block };
 
-    // 题号：标题优先于正文
+    // 题号先标题后正文
     const fromTitle = extractMcqOrdinalFromTitlePlain(
       getVisibleMcqTitleText() || ""
     );
@@ -2973,7 +2973,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return true;
   }
 
-  /** MCQ 选项/配对文案归一化（exact 比对用） */
+  /** MCQ 选项/配对文案归一化 */
   function normalizeMcqOptionPlainForExactCompare(s) {
     return String(s || "")
       .normalize("NFKC")
@@ -3001,7 +3001,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return t;
   }
 
-  /** objectMatching 选中后可能把「A 」写进正文，去掉行首单字母标签 */
+  /** OM 去掉行首单字母 */
   function stripObjectMatchingLeadingLetterBadge(s) {
     let t = stripLeadingMcqListOrdinalFromDomPlain(s);
     for (let pass = 0; pass < 3; pass++) {
@@ -3012,7 +3012,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return t;
   }
 
-  /** 两段文案 exact 匹配分（1/0） */
+  /** 两段 exact 相同则 1 */
   function mcqOptionPairExactMatchScore(textA, textB) {
     const a = normalizeMcqOptionPlainForExactCompare(
       stripLeadingMcqListOrdinalFromDomPlain(String(textA || ""))
@@ -3029,7 +3029,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return mcqOptionPairExactMatchScore(domPlain, jsonPlain);
   }
 
-  /** 取 MCQ 选项正文（排除无障碍 position 子树） */
+  /** MCQ 选项正文，不含 a11y position */
   function mcqItemTextInnerPlainExcludingA11y(innerEl) {
     if (!innerEl) return "";
     const parts = [];
@@ -5035,7 +5035,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
         : resolveVisibleMcqOrdinal();
     const qLabel = domOrd != null ? domOrd : "—";
 
-    // 无题号不展示题干
+    // 无题号不显示题干
     if (domOrd == null) {
       renderQuizSummary(body, "—", null, null);
       updateFabTooltip(null, null);
@@ -5288,7 +5288,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
           Number.isFinite(n) && n >= 1 && n <= pool.length
             ? pool[n - 1]
             : null;
-        // 有题干时题干匹配优先于题号
+        // 题干优先于题号行
         const macRow = stemStrong
           ? findMcqRowByMacLikeInPool(vsRaw, pool)
           : null;
@@ -5313,7 +5313,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
                 ? narrowed[0]
                 : pickStemAmbiguousRow(narrowed, pool, n, vs);
           } else if (!ordOk && !stemOk) {
-            // 题干与题号行均未验证通过时不占位
+            // 未验证不占位
             current = null;
           } else {
             current = byOrd;
