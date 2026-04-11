@@ -1097,7 +1097,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return false;
   }
 
-  /** 顶层 main 过短时不在此 frame 挂 UI */
+  /** main 过短不挂 UI */
   function shouldMountUi() {
     const isTop = window === window.top;
     if (!isTop) return true;
@@ -1249,7 +1249,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return `https://www.netacad.com${p}/${loc}/components.json`;
   }
 
-  /** 从 URL 参数或 hash 解析模块号 */
+  /** URL/hash 解析模块号 */
   function getModuleFromLocationUrl() {
     try {
       const u = new URL(location.href);
@@ -2690,7 +2690,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return ordStr;
   }
 
-  /** Lit block-button 导航上的当前题序 */
+  /** block-button 题序 */
   function getLitBlockButtonQOrdinal() {
     const nodes = querySelectorAllDeep(
       document,
@@ -2810,7 +2810,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return false;
   }
 
-  /** 顶栏 Q 条或 active-block 上的题序 */
+  /** 顶栏或 block 题序 */
   function getActiveLessonBlockQOrdinal() {
     const litBlock = getLitBlockButtonQOrdinal();
     if (litBlock != null) return litBlock;
@@ -3298,7 +3298,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return res;
   }
 
-  /** 正确选项 JSON 行到 DOM 行的映射 */
+  /** 正确项 JSON 到 DOM 行 */
   function assignMcqCorrectJsonToDomRows(domRows, jsonPlain, correctIdx) {
     const jToI = Object.create(null);
     if (!domRows.length || !correctIdx.length) return jToI;
@@ -3389,7 +3389,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return jToI;
   }
 
-  /** 合并答案多行与选项行做 exact 配对 */
+  /** 答案与选项 exact 配对 */
   function assignAnswerLinesToJsonOptionIndices(jsonPlain, answerLines) {
     const n = jsonPlain.length;
     const k = answerLines.length;
@@ -3471,7 +3471,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return picked.sort((a, b) => a - b);
   }
 
-  /** 解析 MCQ 正确选项在 选项 数组中的下标 */
+  /** MCQ 正确项下标 */
   function resolveMcqCorrectOptionIndices(entry) {
     const rawOpts = Array.isArray(entry.选项) ? entry.选项 : [];
     const jsonPlain = rawOpts.map((l) =>
@@ -3554,7 +3554,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return innerEl.parentElement;
   }
 
-  /** 视口内 MCQ 选项与 JSON 对齐上下文 */
+  /** MCQ 选项对齐上下文 */
   function resolveMcqDomHighlightContext(entry) {
     if (!entry) return null;
     const rawOpts = Array.isArray(entry.选项) ? entry.选项 : [];
@@ -3703,7 +3703,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     );
   }
 
-  /** matching 下拉是否已选定具体项 */
+  /** matching 下拉已选项 */
   function isMatchingDropdownListItemSiteSelected(innerEl, wrapper) {
     if (!innerEl || !wrapper) return false;
     try {
@@ -4064,7 +4064,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       .trim();
   }
 
-  /** objectMatching 行高亮 class 更新 */
+  /** OM 行高亮 class */
   function syncMatchingDropdownRowOutline(wrapper, host) {
     if (!wrapper) return;
     const dropRaw = getMatchingRowDropdownPlain(wrapper);
@@ -4116,7 +4116,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return document.body;
   }
 
-  /** 遍历收集 matching / objectMatching 宿主 */
+  /** 收集 matching 宿主 */
   function walkCollectObjectMatchingHosts(entryRoot, maxHosts) {
     maxHosts = maxHosts == null ? 64 : maxHosts;
     const hosts = [];
@@ -4233,7 +4233,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     }
   }
 
-  /** 连线式 object-matching-view 文案采集 */
+  /** OM V2 行文案 */
   function objectMatchingV2RowPlain(btn) {
     if (!btn) return "";
     const te = btn.querySelector(".category-item-text");
@@ -4272,7 +4272,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return out;
   }
 
-  /** objectMatching 页面高亮 */
+  /** OM 页面高亮 */
   function applyObjectMatchingHighlights(entry) {
     clearObjectMatchingHighlights();
     const pairs = parseObjectMatchingPairsFromEntry(entry);
@@ -4283,33 +4283,63 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       for (let vi = 0; vi < v2ctxs.length; vi++) {
         const ctx = v2ctxs[vi];
         ensureNetacadHighlightStylesInShadow(ctx.host);
+        const usedCat = new Set();
+        const usedOpt = new Set();
         for (let pi = 0; pi < pairs.length; pi++) {
           const pair = pairs[pi];
-          let bestCat = null;
-          let bestCatS = 0;
+          const catHits = [];
           for (let ci = 0; ci < ctx.cats.length; ci++) {
             const btn = ctx.cats[ci];
+            if (usedCat.has(btn)) continue;
             const catRaw = objectMatchingV2RowPlain(btn);
             const s = mcqOptionPairExactMatchScore(catRaw, pair.category);
-            if (s > bestCatS) {
-              bestCatS = s;
-              bestCat = btn;
-            }
+            if (s >= OM_CATEGORY_MATCH_MIN) catHits.push({ btn, s });
           }
-          if (!bestCat || bestCatS < OM_CATEGORY_MATCH_MIN) continue;
+          if (!catHits.length) continue;
+          let catMax = 0;
+          for (let hi = 0; hi < catHits.length; hi++) {
+            if (catHits[hi].s > catMax) catMax = catHits[hi].s;
+          }
+          const catTies = catHits.filter((h) => h.s === catMax);
+          catTies.sort((a, b) => {
+            try {
+              const ra = a.btn.getBoundingClientRect();
+              const rb = b.btn.getBoundingClientRect();
+              if (Math.abs(ra.top - rb.top) > 2) return ra.top - rb.top;
+              return ra.left - rb.left;
+            } catch (_e) {
+              return 0;
+            }
+          });
+          const bestCat = catTies[0].btn;
+          usedCat.add(bestCat);
 
-          let bestOpt = null;
-          let bestOptS = 0;
+          const optHits = [];
           for (let oi = 0; oi < ctx.opts.length; oi++) {
             const btn = ctx.opts[oi];
+            if (usedOpt.has(btn)) continue;
             const optRaw = objectMatchingV2RowPlain(btn);
             const s = optionTextMatchScoreMcq(optRaw, pair.answer);
-            if (s > bestOptS) {
-              bestOptS = s;
-              bestOpt = btn;
-            }
+            if (s >= MCQ_DOM_OPTION_MATCH_MIN) optHits.push({ btn, s });
           }
-          if (!bestOpt || bestOptS < MCQ_DOM_OPTION_MATCH_MIN) continue;
+          if (!optHits.length) continue;
+          let optMax = 0;
+          for (let oi = 0; oi < optHits.length; oi++) {
+            if (optHits[oi].s > optMax) optMax = optHits[oi].s;
+          }
+          const optTies = optHits.filter((h) => h.s === optMax);
+          optTies.sort((a, b) => {
+            try {
+              const ra = a.btn.getBoundingClientRect();
+              const rb = b.btn.getBoundingClientRect();
+              if (Math.abs(ra.top - rb.top) > 2) return ra.top - rb.top;
+              return ra.left - rb.left;
+            } catch (_e2) {
+              return 0;
+            }
+          });
+          const bestOpt = optTies[0].btn;
+          usedOpt.add(bestOpt);
 
           const rgb = readOmBadgeRgbTuple(bestCat);
           if (!rgb) continue;
@@ -4344,30 +4374,56 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     }
 
     if (right && right.length) {
+      const usedL = new Set();
+      const usedR = new Set();
       for (const pair of pairs) {
-        let bestL = null;
-        let bestLS = 0;
+        const lHits = [];
         for (const row of left) {
+          if (usedL.has(row)) continue;
           const catRaw = objectMatchingRowTitlePlain(row.wrapper);
           const s = mcqOptionPairExactMatchScore(catRaw, pair.category);
-          if (s > bestLS) {
-            bestLS = s;
-            bestL = row;
-          }
+          if (s >= OM_CATEGORY_MATCH_MIN) lHits.push({ row, s });
         }
-        if (!bestL || bestLS < OM_CATEGORY_MATCH_MIN) continue;
+        if (!lHits.length) continue;
+        let lMax = 0;
+        for (const h of lHits) if (h.s > lMax) lMax = h.s;
+        const lTies = lHits.filter((h) => h.s === lMax);
+        lTies.sort((a, b) => {
+          try {
+            const ra = a.row.wrapper.getBoundingClientRect();
+            const rb = b.row.wrapper.getBoundingClientRect();
+            if (Math.abs(ra.top - rb.top) > 2) return ra.top - rb.top;
+            return ra.left - rb.left;
+          } catch (_e) {
+            return 0;
+          }
+        });
+        const bestL = lTies[0].row;
+        usedL.add(bestL);
 
-        let bestR = null;
-        let bestRS = 0;
+        const rHits = [];
         for (const row of right) {
+          if (usedR.has(row)) continue;
           const optRaw = objectMatchingRowTitlePlain(row.wrapper);
           const s = optionTextMatchScoreMcq(optRaw, pair.answer);
-          if (s > bestRS) {
-            bestRS = s;
-            bestR = row;
-          }
+          if (s >= MCQ_DOM_OPTION_MATCH_MIN) rHits.push({ row, s });
         }
-        if (!bestR || bestRS < MCQ_DOM_OPTION_MATCH_MIN) continue;
+        if (!rHits.length) continue;
+        let rMax = 0;
+        for (const h of rHits) if (h.s > rMax) rMax = h.s;
+        const rTies = rHits.filter((h) => h.s === rMax);
+        rTies.sort((a, b) => {
+          try {
+            const ra = a.row.wrapper.getBoundingClientRect();
+            const rb = b.row.wrapper.getBoundingClientRect();
+            if (Math.abs(ra.top - rb.top) > 2) return ra.top - rb.top;
+            return ra.left - rb.left;
+          } catch (_e2) {
+            return 0;
+          }
+        });
+        const bestR = rTies[0].row;
+        usedR.add(bestR);
 
         const rgb = readOmBadgeRgbTuple(bestL.wrapper);
         if (!rgb) continue;
@@ -4428,7 +4484,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     }
   }
 
-  /** findBestMcq 平分时用所属单元/大纲加权重 */
+  /** findBestMcq 平局加权 */
   function sectionAnchorBonus(row, normView, outlineRef) {
     let b = 0;
     const ut = row.entry.所属单元?.标题;
@@ -4451,7 +4507,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return b;
   }
 
-  /** 按题干 exact key 在题库列表中选一行 */
+  /** 题干 exact 选题 */
   function findBestMcqCore(mcqs, pageText, outlineRef, ipv4StrictStem) {
     if (!mcqs || !mcqs.length) return null;
     const normView = normalizeForMatch(pageText);
@@ -4546,7 +4602,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return narrowed[0];
   }
 
-  /** 用可见题干在 pool 中校正 current */
+  /** 题干校正 current */
   function realignCurrentToVisibleStem(pool, visibleStem, ordinalHint, current) {
     if (!pool || !pool.length || visibleStem == null) return current;
     const vsRaw = String(visibleStem).trim();
@@ -4745,7 +4801,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     fabLayoutSyncedOnce = true;
   }
 
-  /** 面板 right/bottom 与站点 FAB 对齐 */
+  /** 面板对齐 FAB */
   function applyFabSyncLayout(panel, rightPx, bottomPx) {
     panel.style.right = `${Math.max(0, Math.round(rightPx))}px`;
     panel.style.bottom = `${Math.max(0, Math.round(bottomPx))}px`;
