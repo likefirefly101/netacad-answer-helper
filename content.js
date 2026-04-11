@@ -1498,6 +1498,10 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       out.push({
         index: idx,
         r2aMapId: comp._r2aMapId || "",
+        componentId:
+          comp._id != null && String(comp._id).trim() !== ""
+            ? String(comp._id).trim()
+            : "",
         entry,
       });
     }
@@ -2090,23 +2094,118 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return true;
   }
 
-  /** 标题文案是否对应当前题号 */
-  function titlePlainMatchesQuizOrdinal(plain, n) {
-    if (plain == null || !Number.isFinite(n) || n < 1 || n >= 500) return false;
+  /** 从标题文案解析测验题号（问题 n / Qn） */
+  function extractQuizOrdinalFromTitlePlain(plain) {
+    if (plain == null) return null;
     const p = String(plain)
       .replace(/[\u200b\uFEFF]/g, "")
       .replace(/\s+/g, " ")
       .trim();
-    if (!p) return false;
-    const reQ = new RegExp(
-      "(?:^|[\\s:：])(?:问题|question)\\s*[:：]?\\s*" +
-        n +
-        "(?!\\d)(?:\\s|$|:|：|\\.|，|,)",
-      "i"
-    );
-    if (reQ.test(p)) return true;
+    if (!p) return null;
+    const reQ =
+      /(?:^|[\s:：])(?:问题|question)\s*[:：]?\s*(\d+)(?!\d)(?:\s|$|:|：|\.|，|,)/i;
+    const m = p.match(reQ);
+    if (m) {
+      const v = parseInt(m[1], 10);
+      if (Number.isFinite(v) && v > 0 && v < 500) return v;
+    }
     const compact = p.replace(/\s+/g, "");
-    return new RegExp("^Q" + n + "(?!\\d)$", "i").test(compact);
+    const m2 = compact.match(/^Q(\d+)(?!\d)$/i);
+    if (m2) {
+      const v = parseInt(m2[1], 10);
+      if (Number.isFinite(v) && v > 0 && v < 500) return v;
+    }
+    return null;
+  }
+
+  /** 标题文案是否对应当前题号 */
+  function titlePlainMatchesQuizOrdinal(plain, n) {
+    if (plain == null || !Number.isFinite(n) || n < 1 || n >= 500) return false;
+    return extractQuizOrdinalFromTitlePlain(plain) === n;
+  }
+
+  /** MCQ 正文节点所属组件标题上的题号 */
+  function quizOrdinalForMcqBodyInner(bodyEl) {
+    if (!bodyEl) return null;
+    const host =
+      bodyEl.closest("[class*='component-mcq' i]") ||
+      bodyEl.closest(".component-mcq") ||
+      bodyEl.closest("[class*='component' i]");
+    if (!host || isInOurPanel(host)) return null;
+    const t = host.querySelector(
+      ".mcq__title-inner, [class*='mcq__title-inner' i], [class*='mcq__title' i]"
+    );
+    if (!t) return null;
+    const plain =
+      cleanMcqTitleInnerText(mcqTitleInnerPlainFromNode(t)) ||
+      String(t.innerText || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    return extractQuizOrdinalFromTitlePlain(plain);
+  }
+
+  /** 题号对应的 is-question 宿主上的 data-socialgoodpulse-id（与 JSON _id 一致） */
+  function extractDomSocialGoodPulseIdForQuizOrdinal(ordinalStr) {
+    const n = parseInt(String(ordinalStr).trim(), 10);
+    if (!Number.isFinite(n) || n < 1 || n >= 500) return null;
+    const hosts = querySelectorAllDeep(document, "[data-socialgoodpulse-id]", 100);
+    let bestId = null;
+    let bestArea = -1;
+    for (let hi = 0; hi < hosts.length; hi++) {
+      const host = hosts[hi];
+      if (
+        !host ||
+        isInOurPanel(host) ||
+        !domElLikelyRenderedForUser(host)
+      )
+        continue;
+      const cls = String(host.className || "");
+      if (!/\bis-question\b/i.test(cls)) continue;
+
+      const titles = querySelectorAllDeep(
+        host,
+        ".mcq__title-inner, [class*='mcq__title-inner'], .objectMatching__title-inner, [class*='objectMatching__title-inner']",
+        8
+      );
+      let ordMatch = false;
+      for (let ti = 0; ti < titles.length; ti++) {
+        const t = titles[ti];
+        if (!t || isInOurPanel(t)) continue;
+        const plain =
+          cleanMcqTitleInnerText(mcqTitleInnerPlainFromNode(t)) ||
+          String(t.innerText || "")
+            .replace(/\s+/g, " ")
+            .trim();
+        if (extractQuizOrdinalFromTitlePlain(plain) === n) {
+          ordMatch = true;
+          break;
+        }
+      }
+      if (!ordMatch) continue;
+
+      const area = elementVisibleViewportArea(host);
+      if (area < 64) continue;
+      const id = host.getAttribute("data-socialgoodpulse-id");
+      if (!id || !String(id).trim()) continue;
+      if (area > bestArea) {
+        bestArea = area;
+        bestId = String(id).trim();
+      }
+    }
+    return bestId;
+  }
+
+  /** 用 DOM 组件 id 在 pool 中找唯一一行 */
+  function findPoolRowByComponentDomId(ordinalStr, pool) {
+    const cid = extractDomSocialGoodPulseIdForQuizOrdinal(ordinalStr);
+    if (!cid || !pool || !pool.length) return null;
+    const hits = [];
+    for (let i = 0; i < pool.length; i++) {
+      const r = pool[i];
+      if (r && r.componentId && String(r.componentId) === cid) hits.push(r);
+    }
+    if (hits.length === 1) return hits[0];
+    return null;
   }
 
   /** 按「问题 n」标题在附近 scope 取题干 */
@@ -2123,6 +2222,8 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       '[role="heading"]',
     ].join(", ");
     const titles = querySelectorAllDeep(document, titleSels, 120);
+    let globalBestStem = null;
+    let globalBestScore = -1;
     for (const t of titles) {
       if (
         !t ||
@@ -2205,9 +2306,12 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
           }
         }
       }
-      if (bestStem) return bestStem;
+      if (bestStem && bestScore > globalBestScore) {
+        globalBestScore = bestScore;
+        globalBestStem = bestStem;
+      }
     }
-    return null;
+    return globalBestStem;
   }
 
   /** 元素在视口内的可见面积 */
@@ -2239,11 +2343,12 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return best;
   }
 
+  /** MCQ 题干区（inner / body 外壳）视口内最大可见面积 */
   function maxMcqBodyInnerVisibleArea() {
     let best = 0;
     const nodes = querySelectorAllDeep(
       document,
-      '.mcq__body-inner, [class*="mcq__body-inner"]',
+      '.mcq__body-inner, [class*="mcq__body-inner"], .mcq__body, [class*="mcq__body" i]',
       64
     );
     for (let i = 0; i < nodes.length; i++) {
@@ -2325,8 +2430,11 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       matArea >= 200 && matArea >= mcqArea * 0.88 + 48;
     const almostNoMcqBody = mcqArea < 420;
     const matchingTakesRoughHalfOrMore = matchingAreaShare >= 0.38;
+    const matchingNotClearlyBehindMcq =
+      matArea + 48 >= mcqArea * 0.9;
     const useMatchingAggregate =
       matArea >= 200 &&
+      matchingNotClearlyBehindMcq &&
       (almostNoMcqBody ||
         matchingTakesRoughHalfOrMore ||
         matchingVisiblyDominatesMcq);
@@ -2340,8 +2448,8 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       anchored = stemTextAnchoredByProblemTitle(hn);
 
     if (anchored && anchored.length >= 8) {
-      if (!aggStem) return anchored;
-      return aggStem;
+      if (useMatchingAggregate && aggStem) return aggStem;
+      return anchored;
     }
 
     if (aggStem) return aggStem;
@@ -2363,6 +2471,20 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     for (const node of nodes) {
       if (!node || isInOurPanel(node) || !domElLikelyRenderedForUser(node))
         continue;
+      if (Number.isFinite(hn) && hn >= 1 && hn < 500) {
+        const tn = String(node.tagName || "").toLowerCase();
+        const cl = String(node.className || "");
+        const isMatchingLikeDom =
+          /objectmatching|object-matching|matching__|component-objectmatching|component-matching|component__matching/i.test(
+            cl
+          ) ||
+          tn === "object-matching-view" ||
+          tn === "matching-view";
+        if (!isMatchingLikeDom) {
+          const bodyOrd = quizOrdinalForMcqBodyInner(node);
+          if (bodyOrd != null && bodyOrd !== hn) continue;
+        }
+      }
       const r = node.getBoundingClientRect();
       const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
       const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
@@ -2874,6 +2996,17 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       const u = t;
       t = t.replace(/^\s*[\[(（]?\s*[A-Za-z]\s*[\])）、.．:：]\s+/, "").trim();
       t = t.replace(/^\s*\d{1,2}\s*[.)）、.．:：]\s+/, "").trim();
+      if (t === u) break;
+    }
+    return t;
+  }
+
+  /** objectMatching 选中后可能把「A 」写进正文，去掉行首单字母标签 */
+  function stripObjectMatchingLeadingLetterBadge(s) {
+    let t = stripLeadingMcqListOrdinalFromDomPlain(s);
+    for (let pass = 0; pass < 3; pass++) {
+      const u = t;
+      t = t.replace(/^\s*[A-Za-z]\s+/, "").trim();
       if (t === u) break;
     }
     return t;
@@ -3618,7 +3751,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     )
       .replace(/\s+/g, " ")
       .trim();
-    if (t) return t;
+    if (t) return stripObjectMatchingLeadingLetterBadge(t);
     try {
       const c = wrapper.cloneNode(true);
       c
@@ -3626,9 +3759,10 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
           ".category-item-number, [class*='category-item-number' i]"
         )
         .forEach((n) => n.remove());
-      return String(c.innerText || "")
+      t = String(c.innerText || "")
         .replace(/\s+/g, " ")
         .trim();
+      return stripObjectMatchingLeadingLetterBadge(t);
     } catch (_e) {
       return "";
     }
@@ -4023,9 +4157,10 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     if (!btn) return "";
     const te = btn.querySelector(".category-item-text");
     if (te) {
-      return String(te.innerText || te.textContent || "")
+      const raw = String(te.innerText || te.textContent || "")
         .replace(/\s+/g, " ")
         .trim();
+      return stripObjectMatchingLeadingLetterBadge(raw);
     }
     return objectMatchingRowTitlePlain(btn);
   }
@@ -5133,8 +5268,15 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
         }
       }
       const visibleStem = getVisibleMcqStemText(visibleMcqOrdinal);
+      const byDomId =
+        visibleMcqOrdinal != null
+          ? findPoolRowByComponentDomId(String(visibleMcqOrdinal), pool)
+          : null;
+
       let current = null;
-      if (visibleMcqOrdinal != null) {
+      if (byDomId) {
+        current = byDomId;
+      } else if (visibleMcqOrdinal != null) {
         const n = parseInt(visibleMcqOrdinal, 10);
         const vsRaw = visibleStem && String(visibleStem).trim();
         const vsStripped = vsRaw
@@ -5171,7 +5313,8 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
                 ? narrowed[0]
                 : pickStemAmbiguousRow(narrowed, pool, n, vs);
           } else if (!ordOk && !stemOk) {
-            current = byStem || byOrd;
+            // 题干与题号行均未验证通过时不占位
+            current = null;
           } else {
             current = byOrd;
           }
@@ -5188,12 +5331,15 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
         }
       }
 
-      current = realignCurrentToVisibleStem(
-        pool,
-        visibleStem,
-        visibleMcqOrdinal,
-        current
-      );
+      if (!byDomId) {
+        current = realignCurrentToVisibleStem(
+          pool,
+          visibleStem,
+          visibleMcqOrdinal,
+          current
+        );
+      }
+
       const visibleDomStemPanel =
         visibleStem != null
           ? (() => {
@@ -5204,7 +5350,11 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
           : null;
 
       let ambiguousHits = [];
-      if (visibleDomStemPanel && String(visibleDomStemPanel).trim().length >= 12) {
+      if (
+        !byDomId &&
+        visibleDomStemPanel &&
+        String(visibleDomStemPanel).trim().length >= 12
+      ) {
         ambiguousHits = pool.filter((row) =>
           visibleStemMatchesMcqRow(visibleDomStemPanel, row)
         );
@@ -5213,7 +5363,10 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       lastAmbiguousHitsForNav = ambiguousHits;
       lastMcqsFullListForNav = mcqs;
       syncMatchCandidateIndexState(ambiguousHits);
-      if (ambiguousHits.length > 1) {
+      if (byDomId) {
+        panelMatchNavTotal = 0;
+        removeAmbiguousStemHint();
+      } else if (ambiguousHits.length > 1) {
         panelMatchNavTotal = ambiguousHits.length;
         current = ambiguousHits[matchCandidateIndex];
         ensureAmbiguousStemHintOnPage();
@@ -5224,7 +5377,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       }
 
       const matchNavForPanel =
-        ambiguousHits.length > 1
+        !byDomId && ambiguousHits.length > 1
           ? {
               index: matchCandidateIndex + 1,
               total: ambiguousHits.length,
