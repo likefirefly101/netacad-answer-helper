@@ -6,10 +6,6 @@
   const LOCALE_FALLBACK = "zh-CN";
   const NET_CAPTURE_TTL_MS = 5 * 60 * 1000;
 
-  /** 题干与 JSON 相似度阈值 */
-  const STEM_SIM_THRESHOLD = 0.88;
-  /** 长题干截取长度 */
-  const STEM_COMPARE_CLIP = 380;
   /** MCQ 正确项高亮 class */
   const MCQ_CORRECT_HINT_CLASS = "netacad-ah-mcq-correct-hint";
   const MCQ_CORRECT_HINT_INNER_CLASS = "netacad-ah-mcq-correct-hint-inner";
@@ -55,7 +51,7 @@ button.netacad-ah-mcq-correct-hint::after {
   const OM_ROW_WRONG_CLASS = "netacad-ah-om-wrong";
   const OM_ROW_PLACEHOLDER_CLASS = "netacad-ah-om-placeholder";
   const OM_PAIR_TINT_ATTR = "data-netacad-ah-om-pair";
-  const OM_CATEGORY_MATCH_MIN = 0.55;
+  const OM_CATEGORY_MATCH_MIN = 1;
   /** objectMatching 行样式 */
   const OBJECT_MATCHING_SHADOW_CSS = `
 .matching__item-container-options-wrapper.netacad-ah-om-correct {
@@ -150,9 +146,9 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       /* */
     }
   }
-  /** DOM 选项与 JSON 文案相似度下限 */
+  /** MCQ 高亮/映射：选项匹配分通过线 */
   const MCQ_DOM_OPTION_MATCH_MIN = 0.52;
-  /** DOM↔JSON 初配相似度下限 */
+  /** MCQ DOM↔JSON 选项初配通过线 */
   const MCQ_DOM_JSON_MAP_PAIR_MIN = 0.68;
 
   /** 是否计分题型组件 */
@@ -323,6 +319,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return s0.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  /** 比对用归一化 */
   function normalizeForMatch(text) {
     if (!text) return "";
     return String(text)
@@ -332,7 +329,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       .toLowerCase();
   }
 
-  /** 规范化后比对用 */
+  /** 比对用宽松归一化 */
   function relaxForMatch(text) {
     return normalizeForMatch(text)
       .replace(/[,，.。?？!！:：;；、（）()[\]{}'"]/g, " ")
@@ -341,7 +338,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       .trim();
   }
 
-  /** 拉开紧邻 HTML 标签便于与页面 innerText 对齐 */
+  /** 题干 HTML 内标签间插空格 */
   function preJoinAdjacentHtmlTags(s) {
     return String(s == null ? "" : s).replace(/></g, "> <");
   }
@@ -375,6 +372,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return s.normalize("NFKC").replace(/\s+/g, " ").trim();
   }
 
+  /** 题库题干 HTML 转可比纯文本 */
   function unifiedPlainFromQuestionHtml(html) {
     const joined = preJoinAdjacentHtmlTags(html || "");
     let plain = stripHtmlToPlain(joined);
@@ -392,20 +390,26 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return s.normalize("NFKC").replace(/\s+/g, " ").trim();
   }
 
+  /** 可见题干 exact key（与选项同一套归一化） */
+  function stemUnifiedExactKeyFromVisibleStem(visibleStem) {
+    return normalizeMcqOptionPlainForExactCompare(
+      unifiedPlainFromVisibleStem(visibleStem)
+    );
+  }
+
+  /** 题库题干 HTML 的 exact key */
+  function stemUnifiedExactKeyFromQuestionHtml(qRaw) {
+    return normalizeMcqOptionPlainForExactCompare(
+      unifiedPlainFromQuestionHtml(qRaw || "")
+    );
+  }
+
   function canonicalStemStrict(unifiedPlain) {
     return normalizeForMatch(String(unifiedPlain || ""));
   }
 
-  function canonicalStemRelaxed(unifiedPlain) {
-    return relaxForMatch(String(unifiedPlain || ""));
-  }
-
   function normalizeQuestionHtmlForMatch(html) {
     return canonicalStemStrict(unifiedPlainFromQuestionHtml(html));
-  }
-
-  function relaxQuestionHtmlForMatch(html) {
-    return canonicalStemRelaxed(unifiedPlainFromQuestionHtml(html));
   }
 
   /** 题干中提取思科式 MAC */
@@ -634,7 +638,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return null;
   }
 
-  /** 测验顶栏 Q 按钮：在 nav 里也不能当「课程侧栏」丢掉 */
+  /** 顶栏测验 Q 导航控件 */
   function isTopQuizQNavControl(el) {
     if (!el || parseTopQuizQButtonOrdinal(el) == null) return false;
     try {
@@ -792,10 +796,10 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     const bodyOk = hasVisibleMcqBodyInViewport();
     const choiceOk = hasVisibleMcqChoiceSurface();
     if (!bodyOk && !choiceOk) {
-      /* 无标准 MCQ 区时靠顶栏/底部题号判活跃 */
+      // 无 MCQ 区时用顶栏/进度判会话
       const qStrip = collectTopQuizQNavStripRows();
       if (qStrip.length >= 2) {
-        /* 有结果页顶栏时不当作答题中 */
+        // 结果/提交态顶栏不算答题中
         if (looksLikeSubmittedOrResultUi() || isMcqResultSummaryView())
           return false;
         return true;
@@ -1351,7 +1355,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     if (!correctDisplay) {
       correctDisplay = objectMatchingFeedbackPlain(componentInfo);
     }
-    /* objectMatching 拼类别与 body */
+    // 组装 objectMatching 题干
     const 问题 =
       categoryHints.length > 0
         ? `${body}\n${categoryHints.join("\n")}`
@@ -1966,7 +1970,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return s;
   }
 
-  /** 主内容区多段文本，供题干模糊匹配 */
+  /** 主内容区多段文本 */
   function getQuizPageTextForMatch() {
     const chunks = [];
     const pushChunk = (t, max) => {
@@ -2641,7 +2645,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       const want = parseInt(titleOrd, 10);
       if (Number.isFinite(want) && want > 0) {
         if (stripMaxN >= 1 && want > stripMaxN) {
-          /* 题号超顶栏范围则丢弃 */
+          // 超顶栏题号丢弃
         } else {
           const hits = strip.filter((r) => r.n === want);
           if (hits.length === 1) return capOrdinalStringByTopStripQNav(String(want));
@@ -2749,7 +2753,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     const block = getActiveLessonBlockQOrdinal();
     if (block != null) return { ordinal: block };
 
-    /* 标题题号优先于底部题号文案 */
+    // 题号：标题优先于正文
     const fromTitle = extractMcqOrdinalFromTitlePlain(
       getVisibleMcqTitleText() || ""
     );
@@ -2791,148 +2795,20 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return o != null ? o : "—";
   }
 
-  function levenshteinDistance(a, b) {
-    const m = a.length;
-    const n = b.length;
-    if (m === 0) return n;
-    if (n === 0) return m;
-    const row = new Array(n + 1);
-    for (let j = 0; j <= n; j++) row[j] = j;
-    for (let i = 1; i <= m; i++) {
-      let prev = row[0];
-      row[0] = i;
-      for (let j = 1; j <= n; j++) {
-        const temp = row[j];
-        const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
-        row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + cost);
-        prev = temp;
-      }
-    }
-    return row[n];
-  }
-
-  function clipStemForCompare(s) {
-    const t = String(s || "");
-    if (t.length <= STEM_COMPARE_CLIP) return t;
-    const half = Math.floor(STEM_COMPARE_CLIP / 2);
-    return t.slice(0, half) + t.slice(-half);
-  }
-
-  /** 题干归一化串相似度 */
-  function stemSimilarityBetweenNorms(vNorm, nq) {
-    if (!vNorm || !nq || vNorm.length < 12 || nq.length < 8) return 0;
-    if (vNorm === nq) return 1;
-    if (vNorm.includes(nq)) return 1;
-    if (nq.includes(vNorm) && vNorm.length >= 10) return 1;
-    const cv = clipStemForCompare(vNorm);
-    const cq = clipStemForCompare(nq);
-    const maxL = Math.max(cv.length, cq.length);
-    if (maxL === 0) return 0;
-    const d = levenshteinDistance(cv, cq);
-    return 1 - d / maxL;
-  }
-
-  function stemSimilarityForStemMatch(visibleStem, qRaw) {
-    const vP = unifiedPlainFromVisibleStem(visibleStem);
-    const qP = unifiedPlainFromQuestionHtml(qRaw || "");
-    const vNorm = canonicalStemStrict(vP);
-    const vRel = canonicalStemRelaxed(vP);
-    const nq = canonicalStemStrict(qP);
-    const nqRel = canonicalStemRelaxed(qP);
-    return Math.max(
-      stemSimilarityBetweenNorms(vNorm, nq),
-      stemSimilarityBetweenNorms(vRel, nqRel)
-    );
-  }
-
-  /** 可见题干与 JSON 题干是否匹配 */
+  /** 可见题干与题库题干是否 exact 匹配 */
   function visibleStemMatchesQuestion(visibleStem, qRaw) {
     if (!stemIpv4CidrTokensAlign(visibleStem, qRaw)) return false;
-    return stemSimilarityForStemMatch(visibleStem, qRaw) >= STEM_SIM_THRESHOLD;
+    const a = stemUnifiedExactKeyFromVisibleStem(visibleStem);
+    const b = stemUnifiedExactKeyFromQuestionHtml(qRaw);
+    return !!a && !!b && a === b;
   }
 
-  /** 可见题干是否与题库行匹配 */
+  /** 可见题干是否对应当前题库行 */
   function visibleStemMatchesMcqRow(visibleStem, row) {
     const e = row && row.entry;
     if (!e) return false;
-    const vP = unifiedPlainFromVisibleStem(visibleStem);
-    const vNorm = canonicalStemStrict(vP);
-    if (vNorm.length < 10) return false;
-
-    const ckeys = e.objectMatchingCategoryKeys;
-    const akeys = e.objectMatchingAnswerKeys;
-    if (ckeys && ckeys.length >= 2) {
-      let catHits = 0;
-      for (const t of ckeys) {
-        const n = normalizeForMatch(String(t));
-        if (n.length >= 2 && vNorm.includes(n)) catHits++;
-      }
-      let ansHits = 0;
-      if (akeys && akeys.length) {
-        for (const t of akeys) {
-          const n = normalizeForMatch(String(t));
-          if (n.length >= 5 && vNorm.includes(n)) ansHits++;
-        }
-      }
-      const needCat = Math.min(3, ckeys.length);
-      if (catHits >= needCat) return true;
-      if (catHits >= 2 && ansHits >= 2) return true;
-      if (
-        akeys &&
-        akeys.length >= 2 &&
-        ansHits >= Math.min(3, akeys.length)
-      )
-        return true;
-
-      const q0 = String(e.问题 || "")
-        .split(/\n/)[0]
-        .replace(/\s+/g, " ")
-        .trim();
-      const q0n = normalizeForMatch(q0);
-      const hasInstruction =
-        q0n.length > 10 &&
-        vNorm.length > 10 &&
-        (vNorm.includes(q0n) ||
-          q0n.includes(vNorm.slice(0, Math.min(28, vNorm.length))));
-      if (catHits >= 1 && hasInstruction)
-        return visibleStemMatchesQuestion(visibleStem, e.问题 || "");
-      if (catHits >= 2)
-        return visibleStemMatchesQuestion(visibleStem, e.问题 || "");
-      return false;
-    }
+    if (!stemUnifiedExactKeyFromVisibleStem(visibleStem)) return false;
     return visibleStemMatchesQuestion(visibleStem, e.问题 || "");
-  }
-
-  /** @param {{ strictMcq?: boolean }} [opts] strictMcq：MCQ 选项用更严规则，减少“长得像”的误匹配 */
-  function optionTextMatchScore(domPlain, jsonPlain, opts) {
-    const strictMcq = !!(opts && opts.strictMcq);
-    const d = normalizeForMatch(String(domPlain || ""));
-    const j = normalizeForMatch(String(jsonPlain || ""));
-    if (!d || !j) return 0;
-    if (d === j) return 1;
-    if (j.includes(d) || d.includes(j)) {
-      const ratio = j.includes(d) ? d.length / j.length : j.length / d.length;
-      if (!strictMcq || ratio >= 0.92) return 0.93;
-    }
-    if (d.length >= 8 && j.length >= 8) {
-      const sim = stemSimilarityBetweenNorms(d, j);
-      if (strictMcq) return sim >= 0.9 ? sim : 0;
-      return sim;
-    }
-    const shorter = d.length <= j.length ? d : j;
-    const longer = d.length <= j.length ? j : d;
-    if (shorter.length >= 6 && longer.includes(shorter)) {
-      if (strictMcq && shorter.length / longer.length < 0.92) return 0;
-      return 0.88;
-    }
-    return 0;
-  }
-
-  function firstIpv4TokenIn(s) {
-    const m = String(s || "").match(
-      /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/
-    );
-    return m ? m[1] : null;
   }
 
   const RE_IPV4_CIDR_TOKEN =
@@ -2975,94 +2851,69 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return true;
   }
 
-  /** 选项文案中的管理距离签名 */
-  function collectExplicitAdministrativeDistanceSignature(s) {
-    const raw = String(s || "");
-    const parts = [];
-    const push = (n) => {
-      const v = String(n || "").trim();
-      if (v && /^\d{1,3}$/.test(v)) parts.push(v);
-    };
-    let m;
-    const reCnWei = /AD\s*为\s*(\d{1,3})/gi;
-    while ((m = reCnWei.exec(raw)) !== null) push(m[1]);
-    const reCnGl = /管理距离\s*为\s*(\d{1,3})/gi;
-    while ((m = reCnGl.exec(raw)) !== null) push(m[1]);
-    const reEn = /\bAD\s*(?:is|of|=)\s*(\d{1,3})\b/gi;
-    while ((m = reEn.exec(raw)) !== null) push(m[1]);
-    const reColon = /AD\s*[：:]\s*(\d{1,3})/gi;
-    while ((m = reColon.exec(raw)) !== null) push(m[1]);
-    if (!parts.length) return null;
-    return parts.join("\x1e");
-  }
-
-  function collectExplicitVlanIdSignature(s) {
-    const raw = String(s || "");
-    const parts = [];
-    let m;
-    const re = /VLAN\s*(\d{1,4})\b/gi;
-    while ((m = re.exec(raw)) !== null) parts.push(m[1]);
-    return parts.length ? parts.join("\x1e") : null;
-  }
-
-  /** 解析「以…的…地址为目的…」类选项结构 */
-  function extractMcqYiDeStructure(s) {
-    const t = String(s || "")
+  /** MCQ 选项/配对文案归一化（exact 比对用） */
+  function normalizeMcqOptionPlainForExactCompare(s) {
+    return String(s || "")
+      .normalize("NFKC")
+      .replace(/[\u200b\uFEFF]/g, "")
+      .replace(/<[^>]+>/g, " ")
       .replace(/\u00a0/g, " ")
-      .replace(/\s+/g, "")
-      .replace(/[.。,，;；]+$/g, "");
-    const m = t.match(/^以(.+?)的(MAC|IP)地址为目(?:的)?/i);
-    if (!m) return null;
-    const subject = normalizeForMatch(m[1]);
-    const l1 = m[2].toUpperCase();
-    const rest = t.slice(m[0].length);
-    let l2 = l1;
-    let carrier = "";
-    const m2a = rest.match(/^(?:的)?(MAC|IP)地址的(帧|数据包)/i);
-    if (m2a) {
-      l2 = m2a[1].toUpperCase();
-      carrier = m2a[2];
-    } else {
-      const m2b = rest.match(/^(?:的)?地址的(帧|数据包)/i);
-      if (m2b) carrier = m2b[1];
-      else return null;
-    }
-    if (!carrier) return null;
-    return { subject: subject, l1: l1, l2: l2, carrier: carrier };
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
   }
 
-  function mcqYiDeStructureMismatch(a, b) {
-    if (!a || !b) return false;
-    return (
-      a.subject !== b.subject ||
-      a.l1 !== b.l1 ||
-      a.l2 !== b.l2 ||
-      a.carrier !== b.carrier
+  /** 去掉选项前的列表序号前缀 */
+  function stripLeadingMcqListOrdinalFromDomPlain(s) {
+    let t = String(s || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\./.test(t)) return t;
+    for (let pass = 0; pass < 4; pass++) {
+      const u = t;
+      t = t.replace(/^\s*[\[(（]?\s*[A-Za-z]\s*[\])）、.．:：]\s+/, "").trim();
+      t = t.replace(/^\s*\d{1,2}\s*[.)）、.．:：]\s+/, "").trim();
+      if (t === u) break;
+    }
+    return t;
+  }
+
+  /** 两段文案 exact 匹配分（1/0） */
+  function mcqOptionPairExactMatchScore(textA, textB) {
+    const a = normalizeMcqOptionPlainForExactCompare(
+      stripLeadingMcqListOrdinalFromDomPlain(String(textA || ""))
     );
+    const b = normalizeMcqOptionPlainForExactCompare(
+      stripLeadingMcqListOrdinalFromDomPlain(String(textB || ""))
+    );
+    if (!a || !b) return 0;
+    return a === b ? 1 : 0;
   }
 
-  /** DOM 选项与 JSON 选项匹配分 */
+  /** DOM 选项 vs 题库选项 */
   function optionTextMatchScoreMcq(domPlain, jsonPlain) {
-    const dIp = firstIpv4TokenIn(domPlain);
-    const jIp = firstIpv4TokenIn(jsonPlain);
-    if (dIp && jIp) return dIp === jIp ? 1 : 0;
+    return mcqOptionPairExactMatchScore(domPlain, jsonPlain);
+  }
 
-    const dAd = collectExplicitAdministrativeDistanceSignature(domPlain);
-    const jAd = collectExplicitAdministrativeDistanceSignature(jsonPlain);
-    if (dAd && jAd && dAd !== jAd) return 0;
-
-    const dVl = collectExplicitVlanIdSignature(domPlain);
-    const jVl = collectExplicitVlanIdSignature(jsonPlain);
-    if (dVl && jVl && dVl !== jVl) return 0;
-
-    const dYi = extractMcqYiDeStructure(domPlain);
-    const jYi = extractMcqYiDeStructure(jsonPlain);
-    if (dYi && jYi) {
-      if (mcqYiDeStructureMismatch(dYi, jYi)) return 0;
-      return 1;
+  /** 取 MCQ 选项正文（排除无障碍 position 子树） */
+  function mcqItemTextInnerPlainExcludingA11y(innerEl) {
+    if (!innerEl) return "";
+    const parts = [];
+    function walk(node) {
+      if (!node) return;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const x = String(node.nodeValue || "").replace(/\u00a0/g, " ");
+        if (x.trim()) parts.push(x);
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const cn = String(node.className || "");
+      if (/screenReader-position/i.test(cn)) return;
+      for (let c = node.firstChild; c; c = c.nextSibling) walk(c);
     }
-
-    return optionTextMatchScore(domPlain, jsonPlain, { strictMcq: true });
+    walk(innerEl);
+    return parts.join(" ").replace(/\s+/g, " ").trim();
   }
 
   function hasVisibleMcqItemTextInnerInViewport() {
@@ -3132,11 +2983,13 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
       const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
       if (visW * visH < 80) continue;
-      let t = (n.innerText || n.textContent || "")
-        .replace(/\u00a0/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (t.length < 2) continue;
+      let t = mcqItemTextInnerPlainExcludingA11y(n);
+      if (!t.length) {
+        t = (n.innerText || n.textContent || "")
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
       seen.add(n);
       out.push({
         label: inferMcqOptionLabelFromRowEl(n),
@@ -3322,6 +3175,130 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return jToI;
   }
 
+  /** 合并答案多行与选项行做 exact 配对 */
+  function assignAnswerLinesToJsonOptionIndices(jsonPlain, answerLines) {
+    const n = jsonPlain.length;
+    const k = answerLines.length;
+    if (!k || !n) return [];
+    function pairScore(t, j) {
+      return mcqOptionPairExactMatchScore(
+        String(answerLines[t] || ""),
+        String(jsonPlain[j] || "")
+      );
+    }
+    if (k === 1) {
+      let bestJ = -1;
+      let bestS = 0;
+      for (let j = 0; j < n; j++) {
+        const s = pairScore(0, j);
+        if (s > bestS) {
+          bestS = s;
+          bestJ = j;
+        }
+      }
+      return bestJ >= 0 && bestS >= MCQ_DOM_JSON_MAP_PAIR_MIN ? [bestJ] : [];
+    }
+    const bruteWork = mcqBinomial(n, k) * mcqFactorial(k);
+    if (k <= n && k <= 5 && bruteWork <= 24000) {
+      const combs = mcqCombinationsChooseK(n, k);
+      let bestTotal = -1;
+      let bestPerm = null;
+      for (let ci = 0; ci < combs.length; ci++) {
+        const pick = combs[ci];
+        const perms = mcqPermuteArray(pick);
+        for (let pi = 0; pi < perms.length; pi++) {
+          const perm = perms[pi];
+          let total = 0;
+          let ok = true;
+          for (let t = 0; t < k; t++) {
+            const s = pairScore(t, perm[t]);
+            if (s < MCQ_DOM_JSON_MAP_PAIR_MIN) {
+              ok = false;
+              break;
+            }
+            total += s;
+          }
+          if (!ok) continue;
+          if (total > bestTotal) {
+            bestTotal = total;
+            bestPerm = perm;
+          }
+        }
+      }
+      if (bestPerm && bestTotal >= 0) {
+        return [...new Set(bestPerm)].sort((a, b) => a - b);
+      }
+      return [];
+    }
+    const usedJ = new Set();
+    const sortedT = Array.from({ length: k }, (_, i) => i).sort(
+      (a, b) =>
+        String(answerLines[b] || "").length -
+        String(answerLines[a] || "").length
+    );
+    const picked = [];
+    for (let si = 0; si < sortedT.length; si++) {
+      const t = sortedT[si];
+      let bestJ = -1;
+      let bestS = 0;
+      for (let j = 0; j < n; j++) {
+        if (usedJ.has(j)) continue;
+        const s = pairScore(t, j);
+        if (s > bestS) {
+          bestS = s;
+          bestJ = j;
+        }
+      }
+      if (bestJ >= 0 && bestS >= MCQ_DOM_JSON_MAP_PAIR_MIN) {
+        usedJ.add(bestJ);
+        picked.push(bestJ);
+      }
+    }
+    return picked.sort((a, b) => a - b);
+  }
+
+  /** 解析 MCQ 正确选项在 选项 数组中的下标 */
+  function resolveMcqCorrectOptionIndices(entry) {
+    const rawOpts = Array.isArray(entry.选项) ? entry.选项 : [];
+    const jsonPlain = rawOpts.map((l) =>
+      String(l).replace(/\s*（正确答案）\s*$/, "").trim()
+    );
+    const markers = [];
+    rawOpts.forEach((l, i) => {
+      if (String(l).indexOf("（正确答案）") >= 0) markers.push(i);
+    });
+    const markersU = [...new Set(markers)].sort((a, b) => a - b);
+
+    const ansRaw =
+      entry.正确答案标号行 != null && String(entry.正确答案标号行).trim()
+        ? String(entry.正确答案标号行).trim()
+        : String(entry.正确答案 != null ? entry.正确答案 : "").trim();
+    const answerLines = ansRaw
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (markersU.length >= 2) {
+      return markersU;
+    }
+    if (answerLines.length >= 2) {
+      const fromLines = assignAnswerLinesToJsonOptionIndices(
+        jsonPlain,
+        answerLines
+      );
+      if (fromLines.length >= 2) return fromLines;
+      if (fromLines.length > markersU.length) return fromLines;
+    }
+    if (markersU.length === 1) {
+      return markersU;
+    }
+    if (answerLines.length === 1) {
+      const one = assignAnswerLinesToJsonOptionIndices(jsonPlain, answerLines);
+      if (one.length === 1) return one;
+    }
+    return markersU;
+  }
+
   /** 高亮用的 MCQ 选项外层节点 */
   function resolveMcqItemHostForHighlight(innerEl) {
     if (!innerEl) return null;
@@ -3365,20 +3342,25 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
 
   /** 视口内 MCQ 选项与 JSON 对齐上下文 */
   function resolveMcqDomHighlightContext(entry) {
-    const correct =
-      entry && entry.正确答案 != null ? String(entry.正确答案).trim() : "";
-    if (!correct) return null;
-    if (!hasVisibleMcqItemTextInnerInViewport()) return null;
+    if (!entry) return null;
     const rawOpts = Array.isArray(entry.选项) ? entry.选项 : [];
     if (rawOpts.length < 2) return null;
     const jsonPlain = rawOpts.map((l) =>
       String(l).replace(/\s*（正确答案）\s*$/, "").trim()
     );
-    const correctIdx = [];
-    rawOpts.forEach((l, i) => {
-      if (String(l).indexOf("（正确答案）") >= 0) correctIdx.push(i);
-    });
+    const correctIdx = resolveMcqCorrectOptionIndices(entry);
     if (correctIdx.length === 0) return null;
+    if (!hasVisibleMcqItemTextInnerInViewport()) return null;
+    const correctField =
+      entry.正确答案 != null ? String(entry.正确答案).trim() : "";
+    const correctLbl =
+      entry.正确答案标号行 != null
+        ? String(entry.正确答案标号行).trim()
+        : "";
+    const correct =
+      correctIdx.map((j) => jsonPlain[j]).filter(Boolean).join("\n") ||
+      correctLbl ||
+      correctField;
     const domRows = collectVisibleMcqOptionRows();
     if (domRows.length < 1) return null;
     const mapDj = mapDomOptionRowsToJsonIndices(domRows, jsonPlain);
@@ -3394,30 +3376,32 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
   function buildPanelAnswerDisplay(entry) {
     const correct =
       entry && entry.正确答案 != null ? String(entry.正确答案).trim() : "";
-    if (!correct) return null;
 
     if (
       entry.objectMatchingCategoryKeys &&
       entry.objectMatchingCategoryKeys.length >= 2
     ) {
-      return correct;
+      return correct || null;
     }
 
     const rawOpts = Array.isArray(entry.选项) ? entry.选项 : [];
-    const correctIdx = [];
-    rawOpts.forEach((l, i) => {
-      if (String(l).indexOf("（正确答案）") >= 0) correctIdx.push(i);
-    });
-    if (correctIdx.length === 0 || rawOpts.length < 2) return correct;
+    if (rawOpts.length < 2) {
+      return correct || null;
+    }
+
+    const correctIdx = resolveMcqCorrectOptionIndices(entry);
+    if (correctIdx.length === 0) {
+      return correct || null;
+    }
 
     const parts = [];
     for (const j of correctIdx) {
-      const jsonPlain = String(rawOpts[j])
+      const plain = String(rawOpts[j])
         .replace(/\s*（正确答案）\s*$/, "")
         .trim();
-      if (jsonPlain) parts.push(jsonPlain);
+      if (plain) parts.push(plain);
     }
-    if (parts.length === 0) return correct;
+    if (parts.length === 0) return correct || null;
     return parts.join("\n");
   }
 
@@ -3840,7 +3824,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     let bestS = 0;
     for (let pi = 0; pi < pairs.length; pi++) {
       const p = pairs[pi];
-      const s = optionTextMatchScore(catRaw, p.category);
+      const s = mcqOptionPairExactMatchScore(catRaw, p.category);
       if (s > bestS) {
         bestS = s;
         pair = p;
@@ -4090,7 +4074,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
           for (let ci = 0; ci < ctx.cats.length; ci++) {
             const btn = ctx.cats[ci];
             const catRaw = objectMatchingV2RowPlain(btn);
-            const s = optionTextMatchScore(catRaw, pair.category);
+            const s = mcqOptionPairExactMatchScore(catRaw, pair.category);
             if (s > bestCatS) {
               bestCatS = s;
               bestCat = btn;
@@ -4149,7 +4133,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
         let bestLS = 0;
         for (const row of left) {
           const catRaw = objectMatchingRowTitlePlain(row.wrapper);
-          const s = optionTextMatchScore(catRaw, pair.category);
+          const s = mcqOptionPairExactMatchScore(catRaw, pair.category);
           if (s > bestLS) {
             bestLS = s;
             bestL = row;
@@ -4251,14 +4235,21 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return b;
   }
 
+  /** 按题干 exact key 在题库列表中选一行 */
   function findBestMcqCore(mcqs, pageText, outlineRef, ipv4StrictStem) {
+    if (!mcqs || !mcqs.length) return null;
     const normView = normalizeForMatch(pageText);
-    if (!normView || normView.length < 15) return null;
-    const normViewRel = relaxForMatch(pageText);
+    if (!normView || normView.length < 8) return null;
     const ipv4Gate =
       ipv4StrictStem != null && String(ipv4StrictStem).trim().length >= 12
         ? ipv4StrictStem
         : pageText;
+
+    const stemSrc =
+      ipv4StrictStem != null && String(ipv4StrictStem).trim().length >= 8
+        ? ipv4StrictStem
+        : pageText;
+    const viewKey = stemUnifiedExactKeyFromVisibleStem(stemSrc);
 
     let best = null;
     let bestScore = 0;
@@ -4280,49 +4271,10 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
 
     for (const row of mcqs) {
       const q = row.entry.问题 || "";
-      let nq = normalizeQuestionHtmlForMatch(q);
-      if (nq.length < 8) continue;
-      const nqRel = relaxQuestionHtmlForMatch(q);
-
-      if (normView.includes(nq)) {
-        consider(row, nq.length);
-        continue;
-      }
-
-      if (normViewRel.includes(nqRel) && nqRel.length >= 8) {
-        consider(row, nqRel.length);
-        continue;
-      }
-
-      // 去掉「问题 n：」再比题干
-      const stripped = normView
-        .replace(/问题\s*\d+\s*[:：]\s*/gi, " ")
-        .replace(/\bquestion\s*\d+\s*[:.]\s*/gi, " ");
-      if (stripped.includes(nq)) {
-        consider(row, nq.length);
-        continue;
-      }
-
-      const strippedRel = relaxForMatch(
-        pageText
-          .replace(/问题\s*\d+\s*[:：]\s*/gi, " ")
-          .replace(/\bquestion\s*\d+\s*[:.]\s*/gi, " ")
-      );
-      if (strippedRel.includes(nqRel) && nqRel.length >= 8) {
-        consider(row, nqRel.length);
-        continue;
-      }
-
-      const win = Math.min(520, normView.length);
-      const winRel = Math.min(520, normViewRel.length);
-      const sim = stemSimilarityBetweenNorms(normView.slice(0, win), nq);
-      const simRel = stemSimilarityBetweenNorms(
-        normViewRel.slice(0, winRel),
-        nqRel
-      );
-      const mx = Math.max(sim, simRel);
-      if (mx >= STEM_SIM_THRESHOLD) {
-        consider(row, mx * 1e6 + Math.min(nq.length, 999));
+      const bankKey = stemUnifiedExactKeyFromQuestionHtml(q);
+      if (!bankKey) continue;
+      if (viewKey && viewKey === bankKey) {
+        consider(row, bankKey.length);
       }
     }
     return best;
@@ -4352,21 +4304,10 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     const stemOk =
       rawStem && stripQuizAccessibilityStemNoise(rawStem).length >= 8;
     if (stemOk) {
-      let best = null;
-      let bestS = -1;
-      let secondS = -1;
-      for (const row of narrowed) {
-        const s = stemSimilarityForStemMatch(
-          visibleStem,
-          row.entry?.问题 || ""
-        );
-        if (s > bestS) {
-          secondS = bestS;
-          bestS = s;
-          best = row;
-        } else if (s > secondS) secondS = s;
-      }
-      if (best != null && bestS - secondS >= 0.02) return best;
+      const exactHits = narrowed.filter((row) =>
+        visibleStemMatchesQuestion(visibleStem, row.entry?.问题 || "")
+      );
+      if (exactHits.length === 1) return exactHits[0];
     }
     const n = parseInt(String(ordinalHint), 10);
     if (Number.isFinite(n) && n >= 1) {
@@ -4959,7 +4900,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
         : resolveVisibleMcqOrdinal();
     const qLabel = domOrd != null ? domOrd : "—";
 
-    /* 无题号不展示题干 */
+    // 无题号不展示题干
     if (domOrd == null) {
       renderQuizSummary(body, "—", null, null);
       updateFabTooltip(null, null);
@@ -5205,7 +5146,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
           Number.isFinite(n) && n >= 1 && n <= pool.length
             ? pool[n - 1]
             : null;
-        /* 有题干时以题干匹配优先于题号 */
+        // 有题干时题干匹配优先于题号
         const macRow = stemStrong
           ? findMcqRowByMacLikeInPool(vsRaw, pool)
           : null;
