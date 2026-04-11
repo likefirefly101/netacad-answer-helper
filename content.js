@@ -2903,17 +2903,28 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return visibleStemMatchesQuestion(visibleStem, e.问题 || "");
   }
 
-  function optionTextMatchScore(domPlain, jsonPlain) {
+  /** @param {{ strictMcq?: boolean }} [opts] strictMcq：MCQ 选项用更严规则，减少“长得像”的误匹配 */
+  function optionTextMatchScore(domPlain, jsonPlain, opts) {
+    const strictMcq = !!(opts && opts.strictMcq);
     const d = normalizeForMatch(String(domPlain || ""));
     const j = normalizeForMatch(String(jsonPlain || ""));
     if (!d || !j) return 0;
     if (d === j) return 1;
-    if (j.includes(d) || d.includes(j)) return 0.93;
-    if (d.length >= 8 && j.length >= 8)
-      return stemSimilarityBetweenNorms(d, j);
+    if (j.includes(d) || d.includes(j)) {
+      const ratio = j.includes(d) ? d.length / j.length : j.length / d.length;
+      if (!strictMcq || ratio >= 0.92) return 0.93;
+    }
+    if (d.length >= 8 && j.length >= 8) {
+      const sim = stemSimilarityBetweenNorms(d, j);
+      if (strictMcq) return sim >= 0.9 ? sim : 0;
+      return sim;
+    }
     const shorter = d.length <= j.length ? d : j;
     const longer = d.length <= j.length ? j : d;
-    if (shorter.length >= 6 && longer.includes(shorter)) return 0.88;
+    if (shorter.length >= 6 && longer.includes(shorter)) {
+      if (strictMcq && shorter.length / longer.length < 0.92) return 0;
+      return 0.88;
+    }
     return 0;
   }
 
@@ -3030,72 +3041,6 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     );
   }
 
-  function longestCommonPrefixLengthMcq(a, b) {
-    const n = Math.min(a.length, b.length);
-    let i = 0;
-    while (i < n && a.charCodeAt(i) === b.charCodeAt(i)) i++;
-    return i;
-  }
-
-  function longestCommonSuffixLengthMcq(a, b) {
-    let i = 0;
-    const al = a.length;
-    const bl = b.length;
-    const n = Math.min(al, bl);
-    while (
-      i < n &&
-      a.charCodeAt(al - 1 - i) === b.charCodeAt(bl - 1 - i)
-    )
-      i++;
-    return i;
-  }
-
-  function bigramJaccardMcq(a, b) {
-    if (a.length < 2 || b.length < 2) return 0;
-    const A = new Set();
-    for (let i = 0; i < a.length - 1; i++) A.add(a.slice(i, i + 2));
-    const B = new Set();
-    for (let i = 0; i < b.length - 1; i++) B.add(b.slice(i, i + 2));
-    let inter = 0;
-    for (const x of A) {
-      if (B.has(x)) inter++;
-    }
-    const u = A.size + B.size - inter;
-    return u > 0 ? inter / u : 0;
-  }
-
-  /** MCQ 选项复合相似度 */
-  function mcqOptionCompositeSimilarity(domPlain, jsonPlain) {
-    const d = normalizeForMatch(String(domPlain || ""));
-    const j = normalizeForMatch(String(jsonPlain || ""));
-    if (!d || !j) return 0;
-    if (d === j) return 1;
-    const maxL = Math.max(d.length, j.length, 1);
-    const nw = Math.min(40, d.length, j.length);
-    let preM = 0;
-    for (let i = 0; i < nw; i++) {
-      if (d.charCodeAt(i) === j.charCodeAt(i)) preM++;
-    }
-    const preR = preM / maxL;
-    const ns = Math.min(40, d.length, j.length);
-    let sufM = 0;
-    for (let i = 0; i < ns; i++) {
-      if (
-        d.charCodeAt(d.length - 1 - i) === j.charCodeAt(j.length - 1 - i)
-      )
-        sufM++;
-    }
-    const sufR = sufM / maxL;
-    const ml = Math.min(d.length, j.length);
-    const lcpR = ml > 0 ? longestCommonPrefixLengthMcq(d, j) / ml : 0;
-    const lcsR = ml > 0 ? longestCommonSuffixLengthMcq(d, j) / ml : 0;
-    const bi = bigramJaccardMcq(d, j);
-    return Math.min(
-      1,
-      0.2 * preR + 0.2 * sufR + 0.16 * lcpR + 0.14 * lcsR + 0.3 * bi
-    );
-  }
-
   /** DOM 选项与 JSON 选项匹配分 */
   function optionTextMatchScoreMcq(domPlain, jsonPlain) {
     const dIp = firstIpv4TokenIn(domPlain);
@@ -3117,9 +3062,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       return 1;
     }
 
-    const base = optionTextMatchScore(domPlain, jsonPlain);
-    const comp = mcqOptionCompositeSimilarity(domPlain, jsonPlain);
-    return Math.min(1, Math.max(base, comp));
+    return optionTextMatchScore(domPlain, jsonPlain, { strictMcq: true });
   }
 
   function hasVisibleMcqItemTextInnerInViewport() {
