@@ -151,7 +151,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
   /** MCQ DOM 与 JSON 初配阈值 */
   const MCQ_DOM_JSON_MAP_PAIR_MIN = 0.68;
 
-  /** 是否计分题型组件 */
+  /** 计分题型 */
   function isQuizQuestionComponent(c) {
     const t = c && c._component;
     return t === "mcq" || t === "objectMatching" || t === "matching";
@@ -195,23 +195,23 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
   let loadedKey = null;
   let loadInProgress = false;
 
-  /** 多条题干匹配导航 */
+  /** 多题干导航 */
   let lastMatchCandidateSig = "";
   let matchCandidateIndex = 0;
   let panelMatchNavTotal = 0;
   let panelMatchNavClickBound = false;
-  /** 上次 tick 面板状态快照 */
+  /** 上次面板状态 */
   let lastTickPanelState = null;
   let lastAmbiguousHitsForNav = [];
   let lastMcqsFullListForNav = [];
   let ambHintMountedParent = null;
-  /** tick 代数，用于取消过期的异步 tick */
+  /** tick 代 */
   let tickRunGeneration = 0;
-  /** 匹配栏点击后的 observer 防抖窗口 */
+  /** 匹配栏防抖 */
   let matchNavInteractionUntil = 0;
   let observerCoalesceTimer = null;
 
-  /** matching 下拉重涂用 */
+  /** matching 下拉重涂 */
   let lastEntryForMatchingDdRehint = null;
   let matchingDdRehintTimer = null;
   const matchingDropdownHintObserverByHost = new Map();
@@ -230,7 +230,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
   let onResizeSync = null;
   let fabLayoutSyncedOnce = false;
 
-  /** href 未变时粘住最近一次解析出的课节段 */
+  /** 课节段粘滞 */
   let locCourseSticky = {
     href: "",
     contentBase: null,
@@ -434,7 +434,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return m ? m[1] : null;
   }
 
-  /** 页眉大纲与 map 小节号分段前缀一致则同节 */
+  /** 大纲小节对齐 */
   function outlineRefMatchesR2aMapSection(outlineRef, sectionFromMap) {
     const o = String(outlineRef || "").trim();
     const s = String(sectionFromMap || "").trim();
@@ -732,7 +732,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return dedupeTopQStripByN(strip);
   }
 
-  /** 视口内是否有足够大的 MCQ 题干区 */
+  /** 大号 MCQ 题干区 */
   function hasVisibleMcqBodyInViewport() {
     const nodes = querySelectorAllDeep(
       document,
@@ -751,7 +751,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return false;
   }
 
-  /** 视口内是否有可选选项控件 */
+  /** 选项控件可见 */
   function hasVisibleMcqChoiceSurface() {
     const sels = [
       "button[role='radio']",
@@ -791,7 +791,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return false;
   }
 
-  /** 是否处于可答题的测验会话 */
+  /** 可答题测验中 */
   function hasVisibleActiveMcqSession() {
     const bodyOk = hasVisibleMcqBodyInViewport();
     const choiceOk = hasVisibleMcqChoiceSurface();
@@ -932,7 +932,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return false;
   }
 
-  /** 含 open shadow 的测验页全文，用于结果态检测 */
+  /** 测验页全文，判结果态 */
   function shadowInclusiveQuizBlob(maxLen) {
     maxLen = maxLen || 80000;
     const parts = [];
@@ -971,7 +971,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return parts.join(" ").replace(/\s+/g, " ").trim();
   }
 
-  /** 轻量检测测验结果/提交态 */
+  /** 测验结果态 */
   function looksLikeSubmittedOrResultUi() {
     try {
       const blob = shadowInclusiveQuizBlob(72000);
@@ -1234,7 +1234,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return settings.netacadLocale || LOCALE_FALLBACK;
   }
 
-  /** 存储的 basePath 拼 components.json 绝对 URL */
+  /** basePath 拼 components.json URL */
   function absoluteComponentsUrlFromStoredPath() {
     const p = String(settings.netacadComponentsBasePath || "").replace(
       /\/+$/,
@@ -1384,7 +1384,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     };
   }
 
-  /** matching 组件转与 objectMatching 统一的条目结构 */
+  /** matching 转 OM 条目结构 */
   function buildMatchingEntry(componentInfo, unitTitle, unitBody) {
     const body = componentInfo.body || "";
     let items = componentInfo._items;
@@ -1610,7 +1610,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
   let lastDomStemBlob = "";
   let lastDomOutlineRef = null;
 
-  /** 解析课节大纲号 供与 JSON 小节对齐 */
+  /** 课节大纲号 */
   function extractCourseOutlineRefNearMcq(skip) {
     const mcqSel =
       '.mcq__body-inner, .mcq__body, [class*="mcq__body-inner"], [class*="mcq__body" i], ' +
@@ -2144,7 +2144,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return extractQuizOrdinalFromTitlePlain(plain);
   }
 
-  /** is-question 宿主 data-socialgoodpulse-id，对齐 JSON _id */
+  /** data-socialgoodpulse-id 对 JSON _id */
   function extractDomSocialGoodPulseIdForQuizOrdinal(ordinalStr) {
     const n = parseInt(String(ordinalStr).trim(), 10);
     if (!Number.isFinite(n) || n < 1 || n >= 500) return null;
@@ -2164,7 +2164,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
 
       const titles = querySelectorAllDeep(
         host,
-        ".mcq__title-inner, [class*='mcq__title-inner'], .objectMatching__title-inner, [class*='objectMatching__title-inner']",
+        ".mcq__title-inner, [class*='mcq__title-inner'], .objectMatching__title-inner, [class*='objectMatching__title-inner'], .matching__title-inner, [class*='matching__title-inner']",
         8
       );
       let ordMatch = false;
@@ -2215,6 +2215,8 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       ".mcq__title-inner",
       '[class*="mcq__title-inner"]',
       '[class*="mcq__title" i]',
+      ".matching__title-inner",
+      '[class*="matching__title-inner"]',
       "h1",
       "h2",
       "h3",
@@ -2254,6 +2256,8 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
         "[class*='mcq__body-inner']",
         ".mcq__body",
         "[class*='mcq__body' i]",
+        ".matching__body-inner",
+        "[class*='matching__body-inner' i]",
         '[class*="objectmatching" i]',
         '[class*="object-matching" i]',
         '[class*="matching__" i]',
@@ -2268,7 +2272,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       let bestScore = -1;
       for (const scope of scopes) {
         if (!scope) continue;
-        const bodies = scope.querySelectorAll(bodySel);
+        const bodies = querySelectorAllDeep(scope, bodySel, 72);
         for (const b of bodies) {
           if (!b || isInOurPanel(b) || !domElLikelyRenderedForUser(b)) continue;
           if (!(t.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING))
@@ -2314,7 +2318,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return globalBestStem;
   }
 
-  /** 元素在视口内的可见面积 */
+  /** 视口可见面积 */
   function elementVisibleViewportArea(el) {
     if (!el || !domElLikelyRenderedForUser(el)) return 0;
     try {
@@ -2329,6 +2333,15 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     }
   }
 
+  /** matching 下拉 light 宿主 */
+  function isLightDomMatchingDropdownHost(el) {
+    if (!el) return false;
+    const c = String(el.className || "");
+    if (!/\bis-question\b/i.test(c)) return false;
+    if (/\bobjectmatching__inner\b/i.test(c)) return false;
+    return /\bmatching__inner\b/i.test(c);
+  }
+
   function maxMatchingLikeHostVisibleArea() {
     let best = 0;
     const hosts = querySelectorAllDeep(
@@ -2340,10 +2353,17 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       const a = elementVisibleViewportArea(hosts[i]);
       if (a > best) best = a;
     }
+    const inners = querySelectorAllDeep(document, "[data-socialgoodpulse-id]", 48);
+    for (let j = 0; j < inners.length; j++) {
+      const h = inners[j];
+      if (!isLightDomMatchingDropdownHost(h)) continue;
+      const a = elementVisibleViewportArea(h);
+      if (a > best) best = a;
+    }
     return best;
   }
 
-  /** MCQ 题干区视口内最大可见面积 */
+  /** MCQ 题干区最大面积 */
   function maxMcqBodyInnerVisibleArea() {
     let best = 0;
     const nodes = querySelectorAllDeep(
@@ -2358,7 +2378,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return best;
   }
 
-  /** matching 宿主拼成一段题干 */
+  /** matching-view 聚合题干 */
   function collectAggregatedMatchingLikeStemFromHost(mvHost) {
     if (!mvHost || isInOurPanel(mvHost) || !domElLikelyRenderedForUser(mvHost))
       return null;
@@ -2404,6 +2424,62 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return t.length >= 16 ? t : null;
   }
 
+  /** matching 下拉聚合题干 */
+  function collectAggregatedMatchingStemFromLightHost(lightHost) {
+    if (
+      !lightHost ||
+      isInOurPanel(lightHost) ||
+      !domElLikelyRenderedForUser(lightHost) ||
+      !isLightDomMatchingDropdownHost(lightHost)
+    )
+      return null;
+    if (elementVisibleViewportArea(lightHost) < 80) return null;
+
+    const bodyNodes = querySelectorAllDeep(
+      lightHost,
+      ".matching__body-inner, [class*='matching__body-inner' i]",
+      8
+    );
+    let bodyTxt = "";
+    for (let bi = 0; bi < bodyNodes.length; bi++) {
+      const b = bodyNodes[bi];
+      const tx = String(b.innerText || b.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (tx.length > bodyTxt.length) bodyTxt = tx;
+    }
+
+    const dds = querySelectorAllDeep(
+      lightHost,
+      "matching-dropdown-view, object-matching-dropdown-view",
+      40
+    );
+    const rowLines = [];
+    for (let di = 0; di < dds.length; di++) {
+      const dd = dds[di];
+      const dsr = dd.shadowRoot;
+      if (!dsr) continue;
+      const titleEl =
+        dsr.querySelector(
+          ".matching__item-title .matching__item-title_inner"
+        ) || dsr.querySelector(".matching__item-title_inner");
+      const line = String(
+        (titleEl && (titleEl.innerText || titleEl.textContent)) || ""
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (
+        line.length >= 2 &&
+        !/请选择一个选项|请选择|select an option/i.test(line)
+      )
+        rowLines.push(line);
+    }
+    if (!bodyTxt && rowLines.length < 2) return null;
+    const pack = [bodyTxt].concat(rowLines).filter(Boolean).join("\n");
+    const t = pack.replace(/\s+/g, " ").trim();
+    return t.length >= 16 ? t : null;
+  }
+
   function collectAggregatedMatchingLikeStem() {
     const mv = querySelectorAllDeep(document, "matching-view", 8);
     for (let i = 0; i < mv.length; i++) {
@@ -2413,6 +2489,11 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     const om = querySelectorAllDeep(document, "object-matching-view", 8);
     for (let j = 0; j < om.length; j++) {
       const hit = collectAggregatedMatchingLikeStemFromHost(om[j]);
+      if (hit) return hit;
+    }
+    const lightHosts = querySelectorAllDeep(document, "[data-socialgoodpulse-id]", 32);
+    for (let k = 0; k < lightHosts.length; k++) {
+      const hit = collectAggregatedMatchingStemFromLightHost(lightHosts[k]);
       if (hit) return hit;
     }
     return null;
@@ -2917,7 +2998,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return o != null ? o : "—";
   }
 
-  /** 可见题干与题库题干是否 exact 匹配 */
+  /** 题干与题库 exact */
   function visibleStemMatchesQuestion(visibleStem, qRaw) {
     if (!stemIpv4CidrTokensAlign(visibleStem, qRaw)) return false;
     const a = stemUnifiedExactKeyFromVisibleStem(visibleStem);
@@ -2925,7 +3006,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return !!a && !!b && a === b;
   }
 
-  /** 可见题干是否对应当前题库行 */
+  /** 题干对题库行 */
   function visibleStemMatchesMcqRow(visibleStem, row) {
     const e = row && row.entry;
     if (!e) return false;
@@ -2952,7 +3033,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return out;
   }
 
-  /** IPv4/CIDR 在页面与题库题干间是否一致 */
+  /** IPv4/CIDR 题干一致 */
   function stemIpv4CidrTokensAlign(visibleStem, qRaw) {
     const vPlain = unifiedPlainFromVisibleStem(visibleStem);
     const qPlain = unifiedPlainFromQuestionHtml(qRaw || "");
@@ -2985,7 +3066,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
       .toLowerCase();
   }
 
-  /** 去掉选项前的列表序号前缀 */
+  /** 去掉列表序号前缀 */
   function stripLeadingMcqListOrdinalFromDomPlain(s) {
     let t = String(s || "")
       .replace(/\u00a0/g, " ")
@@ -3029,7 +3110,7 @@ li.${MATCHING_DD_CORRECT_CLASS} > * {
     return mcqOptionPairExactMatchScore(domPlain, jsonPlain);
   }
 
-  /** MCQ 选项正文，不含 a11y position */
+  /** MCQ 选项正文无 a11y 序号 */
   function mcqItemTextInnerPlainExcludingA11y(innerEl) {
     if (!innerEl) return "";
     const parts = [];
