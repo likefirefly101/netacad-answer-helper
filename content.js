@@ -20,8 +20,27 @@
 
   let pollTimer = null;
   let observer = null;
+  let intersectionObserver = null;
   let onResizeSync = null;
   let fabLayoutSyncedOnce = false;
+  let mutationDebounceTimer = null;
+  let lastTickTime = 0;
+  const TICK_DEBOUNCE_MS = 200;
+  
+  // 缓存GCBR结果（getBoundingClientRect）
+  let gcbrCache = {
+    panel: null,
+    panelTime: 0,
+    fab: null,
+    fabTime: 0,
+  };
+  const GCBR_CACHE_TTL = 100; // 100ms TTL
+  
+  // IntersectionObserver状态机
+  let mcqIntersectionState = {
+    isActive: false,
+    lastChangeTime: 0,
+  };
 
   function applyModulePlaceholder(text, m) {
     if (text == null || text === "") return text;
@@ -1859,7 +1878,18 @@
       return;
     }
     const { el, extraBottom, fabWin } = anchor;
-    const r = el.getBoundingClientRect();
+    const now = Date.now();
+    
+    // 获取缓存的GCBR结果（FAB元素）
+    let r = null;
+    if (gcbrCache.fab && now - gcbrCache.fabTime < GCBR_CACHE_TTL) {
+      r = gcbrCache.fab;
+    } else {
+      r = el.getBoundingClientRect();
+      gcbrCache.fab = r;
+      gcbrCache.fabTime = now;
+    }
+    
     const pw = window;
     if (fabWin === pw) {
       const rightPx = pw.innerWidth - r.right;
@@ -1877,7 +1907,17 @@
       }
       return;
     }
-    const box = fr.getBoundingClientRect();
+    
+    // 获取缓存的frame GCBR
+    let box = null;
+    if (gcbrCache.panel && now - gcbrCache.panelTime < GCBR_CACHE_TTL) {
+      box = gcbrCache.panel;
+    } else {
+      box = fr.getBoundingClientRect();
+      gcbrCache.panel = box;
+      gcbrCache.panelTime = now;
+    }
+    
     const cl = fr.clientLeft;
     const ct = fr.clientTop;
     const rightPx =
@@ -2061,15 +2101,36 @@
       .replace(/"/g, "&quot;");
   }
 
-  async function refreshSettings() {
+async function refreshSettings() {
+  try {
+    // 1. 前置检查：防止上下文环境丢失导致报错
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+      console.warn("NetAcad Helper: chrome.storage is unavailable.");
+      return; // 保持当前的 settings 状态，或走默认降级
+    }
+
     const sessionData = await chrome.storage.local.get([
+      "netacadComponentsBasePath",
       "netacadContentBase",
+      "netacadCourseSegment",
       "netacadModuleFromNet",
       "netacadCapturedAt",
       "netacadLocale",
     ]);
+
+    const rawSeg = sessionData.netacadCourseSegment;
+    const rawPath = sessionData.netacadComponentsBasePath;
+    
     settings = {
+      netacadComponentsBasePath:
+        rawPath != null && String(rawPath).trim() !== ""
+          ? String(rawPath).trim().replace(/\/+$/, "")
+          : null,
       netacadContentBase: sessionData.netacadContentBase || null,
+      netacadCourseSegment:
+        rawSeg != null && String(rawSeg).trim() !== ""
+          ? String(rawSeg).trim()
+          : null,
       netacadModuleFromNet:
         sessionData.netacadModuleFromNet != null
           ? Number(sessionData.netacadModuleFromNet)
@@ -2077,7 +2138,12 @@
       netacadCapturedAt: sessionData.netacadCapturedAt || null,
       netacadLocale: sessionData.netacadLocale || null,
     };
+  } catch (error) {
+    // 2. 异常捕获：通常是 Extension context invalidated
+    // 发生异常时不破坏主流程，保留上一次成功的 settings 或静默失败
+    console.debug("NetAcad Helper: Failed to read storage", error);
   }
+}
 
   /** 休眠 UI */
   function applyDormantQuizUi(panel) {
@@ -2260,27 +2326,102 @@
       });
     } finally {
       syncPanelPositionToSiteFabs();
+      // 由于DOM可能改变，清除GCBR缓存，下次调用会重新获取
+      lastTickTime = Date.now();
+    }
+  }
+
+  function debouncedTickFromMutation() {
+    const now = Date.now();
+    if (now - lastTickTime < TICK_DEBOUNCE_MS) {
+      if (mutationDebounceTimer) return;
+      mutationDebounceTimer = window.setTimeout(() => {
+        mutationDebounceTimer = null;
+        void tick();
+      }, TICK_DEBOUNCE_MS - (now - lastTickTime));
+      return;
+    }
+    lastTickTime = now;
+    void tick();
+  }
+
+  function setupIntersectionObserver() {
+    // 监控MCQ容器的可见性变化
+    const options = {
+      root: null,
+      rootMargin: '100px',
+      threshold: [0, 0.1, 0.5],
+    };
+    
+    intersectionObserver = new IntersectionObserver((entries) => {
+      let hasVisibilityChange = false;
+      for (const entry of entries) {
+        const isNowIntersecting = entry.isIntersecting;
+        if (isNowIntersecting !== mcqIntersectionState.isActive) {
+          mcqIntersectionState.isActive = isNowIntersecting;
+          hasVisibilityChange = true;
+          mcqIntersectionState.lastChangeTime = Date.now();
+        }
+      }
+      if (hasVisibilityChange) {
+        debouncedTickFromMutation();
+      }
+    }, options);
+    
+    // 观察所有可能的MCQ容器
+    const mcqSelectors = [
+      '.mcq__body',
+      '.mcq__body-inner',
+      '[class*="mcq__body" i]',
+      '.mcq__item',
+      'button[role="radio"]',
+      '[role="radiogroup"]',
+    ];
+    
+    for (const selector of mcqSelectors) {
+      try {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          if (!el._mcqObserved) {
+            intersectionObserver.observe(el);
+            el._mcqObserved = true;
+          }
+        });
+      } catch (_e) {
+        // 忽略无效的选择器
+      }
     }
   }
 
   function startPolling() {
     stopPolling();
-    pollTimer = window.setInterval(() => {
-      void tick();
-    }, 900);
+    
+    // 只使用MutationObserver（带防抖）+ IntersectionObserver
     observer = new MutationObserver(() => {
-      window.requestAnimationFrame(() => {
-        void tick();
-      });
+      debouncedTickFromMutation();
     });
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
+      attributeFilter: [
+        'class',
+        'aria-current',
+        'aria-selected',
+        'style',
+        'data-testid',
+      ],
     });
+    
+    // 初始化IntersectionObserver
+    setupIntersectionObserver();
+    
     if (!onResizeSync) {
-      onResizeSync = () => syncPanelPositionToSiteFabs();
-      window.addEventListener("resize", onResizeSync);
+      onResizeSync = () => {
+        lastTickTime = 0; // 重置防抖
+        syncPanelPositionToSiteFabs();
+      };
+      window.addEventListener("resize", onResizeSync, { passive: true });
     }
   }
 
@@ -2289,9 +2430,17 @@
       clearInterval(pollTimer);
       pollTimer = null;
     }
+    if (mutationDebounceTimer) {
+      clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = null;
+    }
     if (observer) {
       observer.disconnect();
       observer = null;
+    }
+    if (intersectionObserver) {
+      intersectionObserver.disconnect();
+      intersectionObserver = null;
     }
     if (onResizeSync) {
       window.removeEventListener("resize", onResizeSync);
