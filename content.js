@@ -6,13 +6,220 @@
   const LOCALE_FALLBACK = "zh-CN";
   const NET_CAPTURE_TTL_MS = 5 * 60 * 1000;
 
+  /** MCQ 正确项高亮 class */
+  const MCQ_CORRECT_HINT_CLASS = "netacad-ah-mcq-correct-hint";
+  const MCQ_CORRECT_HINT_INNER_CLASS = "netacad-ah-mcq-correct-hint-inner";
+  /** matching 下拉正确项高亮 class */
+  const MATCHING_DD_CORRECT_CLASS = "netacad-ah-matching-dd-correct";
+  /** Shadow 内高亮样式注入标记 */
+  const NETACAD_SHADOW_HIGHLIGHT_ATTR = "data-netacad-ah-hl";
+  const MCQ_SHADOW_HIGHLIGHT_CSS = `
+label.mcq__item-label.netacad-ah-mcq-correct-hint,
+label.js-item-label.netacad-ah-mcq-correct-hint,
+label[role="listitem"].netacad-ah-mcq-correct-hint,
+.mcq__item.netacad-ah-mcq-correct-hint,
+.js-mcq-item.netacad-ah-mcq-correct-hint,
+button.netacad-ah-mcq-correct-hint {
+  position: relative !important;
+  box-sizing: border-box !important;
+  isolation: isolate;
+}
+label.mcq__item-label.netacad-ah-mcq-correct-hint::after,
+label.js-item-label.netacad-ah-mcq-correct-hint::after,
+label[role="listitem"].netacad-ah-mcq-correct-hint::after,
+.mcq__item.netacad-ah-mcq-correct-hint::after,
+.js-mcq-item.netacad-ah-mcq-correct-hint::after,
+button.netacad-ah-mcq-correct-hint::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit;
+  z-index: 999 !important;
+  pointer-events: none !important;
+  box-sizing: border-box !important;
+  box-shadow: inset 0 0 0 3px #15803d !important;
+  background-color: rgba(34, 197, 94, 0.18) !important;
+}
+.mcq__item-text-inner.netacad-ah-mcq-correct-hint-inner,
+[class*="mcq__item-text-inner"].netacad-ah-mcq-correct-hint-inner {
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+`.trim();
+  const OM_ROW_CORRECT_CLASS = "netacad-ah-om-correct";
+  const OM_ROW_WRONG_CLASS = "netacad-ah-om-wrong";
+  const OM_ROW_PLACEHOLDER_CLASS = "netacad-ah-om-placeholder";
+  const OM_PAIR_TINT_ATTR = "data-netacad-ah-om-pair";
+  const OM_CATEGORY_MATCH_MIN = 1;
+  /** objectMatching 行样式 */
+  const OBJECT_MATCHING_SHADOW_CSS = `
+.matching__item-container-options-wrapper.netacad-ah-om-correct {
+  box-sizing: border-box !important;
+  border-radius: 10px !important;
+  outline: 3px solid #15803d !important;
+  outline-offset: 2px !important;
+}
+.matching__item-container-options-wrapper.netacad-ah-om-wrong {
+  box-sizing: border-box !important;
+  border-radius: 10px !important;
+  outline: 3px solid #c2410c !important;
+  outline-offset: 2px !important;
+}
+.matching__item-container-options-wrapper.netacad-ah-om-placeholder {
+  box-sizing: border-box !important;
+  border-radius: 10px !important;
+  outline: 3px solid #2563eb !important;
+  outline-offset: 2px !important;
+}
+/* matching 下拉 li 高亮 */
+li.${MATCHING_DD_CORRECT_CLASS}[role="option"],
+li.${MATCHING_DD_CORRECT_CLASS} {
+  position: relative !important;
+  box-sizing: border-box !important;
+  isolation: isolate;
+  border-radius: 8px !important;
+  outline: none !important;
+  list-style: none !important;
+}
+li.${MATCHING_DD_CORRECT_CLASS}[role="option"]::after,
+li.${MATCHING_DD_CORRECT_CLASS}::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  box-sizing: border-box !important;
+  box-shadow: inset 0 0 0 3px #15803d !important;
+  background-color: rgba(34, 197, 94, 0.18) !important;
+}
+li.${MATCHING_DD_CORRECT_CLASS}[role="option"] > *,
+li.${MATCHING_DD_CORRECT_CLASS} > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+.dropdown__item-inner.${MATCHING_DD_CORRECT_CLASS},
+.js-dropdown-list-item-inner.${MATCHING_DD_CORRECT_CLASS} {
+  position: relative !important;
+  isolation: isolate;
+}
+.dropdown__item-inner.${MATCHING_DD_CORRECT_CLASS}::after,
+.js-dropdown-list-item-inner.${MATCHING_DD_CORRECT_CLASS}::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  box-sizing: border-box !important;
+  box-shadow: inset 0 0 0 3px #15803d !important;
+  background-color: rgba(34, 197, 94, 0.18) !important;
+}
+.dropdown__item-inner.${MATCHING_DD_CORRECT_CLASS} > *,
+.js-dropdown-list-item-inner.${MATCHING_DD_CORRECT_CLASS} > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+`.trim();
+  const NETACAD_SHADOW_HIGHLIGHT_CSS =
+    MCQ_SHADOW_HIGHLIGHT_CSS + "\n" + OBJECT_MATCHING_SHADOW_CSS;
+
+  function ensureNetacadHighlightStylesInShadow(el) {
+    try {
+      if (!el) return;
+      // 子 shadow 注入样式
+      let root = el.shadowRoot || null;
+      if (!root) {
+        const r = el.getRootNode && el.getRootNode();
+        if (r && typeof ShadowRoot !== "undefined" && r instanceof ShadowRoot)
+          root = r;
+      }
+      if (!root) return;
+      const sel = "style[" + NETACAD_SHADOW_HIGHLIGHT_ATTR + "]";
+      if (root.querySelector(sel)) return;
+      const st = document.createElement("style");
+      st.setAttribute(NETACAD_SHADOW_HIGHLIGHT_ATTR, "1");
+      st.textContent = NETACAD_SHADOW_HIGHLIGHT_CSS;
+      root.appendChild(st);
+    } catch (_e) {
+      /* */
+    }
+  }
+  /** MCQ 选项匹配分阈值 */
+  const MCQ_DOM_OPTION_MATCH_MIN = 0.52;
+  /** MCQ DOM 与 JSON 初配阈值 */
+  const MCQ_DOM_JSON_MAP_PAIR_MIN = 0.68;
+
+  /** 计分题型 */
+  function isQuizQuestionComponent(c) {
+    const t = c && c._component;
+    return t === "mcq" || t === "objectMatching" || t === "matching";
+  }
+
+  const OBJECT_MATCHING_DOM =
+    '[class*="objectmatching" i], [class*="object-matching" i], [class*="matching__" i], [class*="component-objectmatching" i], [class*="component-matching" i], [class*="component__matching" i], object-matching-view, matching-view';
+
+  /** Lit block-button data-index 转题号 */
+  function litBlockDataIndexToQuestionOrdinal(d, minDataIndexAmongBlocks) {
+    if (minDataIndexAmongBlocks === 0) return d + 1;
+    if (minDataIndexAmongBlocks === 1) return d;
+    if (minDataIndexAmongBlocks == null) return d + 1;
+    return d + 1;
+  }
+
+  function computeLitBlockDataIndexMin() {
+    const nodes = querySelectorAllDeep(
+      document,
+      [
+        "button[data-index][class*='block-button']",
+        "button.block-button[data-index]",
+        "button[data-index].block-button",
+      ].join(", "),
+      220
+    );
+    let minD = null;
+    for (const el of nodes) {
+      if (!el || isInOurPanel(el)) continue;
+      const raw = el.getAttribute("data-index");
+      if (raw == null || !/^\d+$/.test(String(raw).trim())) continue;
+      const d = parseInt(String(raw).trim(), 10);
+      if (d < 0 || d >= 500) continue;
+      minD = minD == null ? d : Math.min(minD, d);
+    }
+    return minD;
+  }
+
   let components = null;
   let model = null;
   let loadedKey = null;
   let loadInProgress = false;
 
+  /** 多题干导航 */
+  let lastMatchCandidateSig = "";
+  let matchCandidateIndex = 0;
+  let panelMatchNavTotal = 0;
+  let panelMatchNavClickBound = false;
+  /** 上次面板状态 */
+  let lastTickPanelState = null;
+  let lastAmbiguousHitsForNav = [];
+  let lastMcqsFullListForNav = [];
+  let ambHintMountedParent = null;
+  /** tick 代 */
+  let tickRunGeneration = 0;
+  /** 匹配栏防抖 */
+  let matchNavInteractionUntil = 0;
+  let observerCoalesceTimer = null;
+
+  /** matching 下拉重涂 */
+  let lastEntryForMatchingDdRehint = null;
+  let matchingDdRehintTimer = null;
+  const matchingDropdownHintObserverByHost = new Map();
+
   let settings = {
+    netacadComponentsBasePath: null,
     netacadContentBase: null,
+    netacadCourseSegment: null,
     netacadModuleFromNet: null,
     netacadCapturedAt: null,
     netacadLocale: null,
@@ -42,9 +249,71 @@
     lastChangeTime: 0,
   };
 
+  /** 课节段粘滞 */
+  let locCourseSticky = {
+    href: "",
+    contentBase: null,
+    courseSlug: null,
+  };
+
+  function bumpLocCourseSticky() {
+    const href = String(location.href || "");
+    if (href !== locCourseSticky.href) {
+      locCourseSticky.href = href;
+      locCourseSticky.contentBase = getContentBaseFromPageLocation();
+      locCourseSticky.courseSlug = getCourseContentSlugFromPageLocation();
+      return;
+    }
+    const b = getContentBaseFromPageLocation();
+    const sl = getCourseContentSlugFromPageLocation();
+    if (b) locCourseSticky.contentBase = b;
+    if (sl) locCourseSticky.courseSlug = sl;
+  }
+
   function applyModulePlaceholder(text, m) {
     if (text == null || text === "") return text;
     return String(text).split("{{_moduleNumber}}").join(String(m));
+  }
+
+  function segmentLooksLikeUuid(seg) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      String(seg || "")
+    );
+  }
+
+  function looksLikeLocaleSegment(seg) {
+    return /^[a-z]{2}(?:-[A-Z]{2})?$/i.test(String(seg || ""));
+  }
+
+  /** basePath 上用于模块占位符的路径段 */
+  function slugForModuleFromComponentsBasePath(basePath) {
+    const parts = String(basePath || "").split("/").filter(Boolean);
+    if (!parts.length) return "";
+    const last = parts[parts.length - 1];
+    if (looksLikeLocaleSegment(last) && parts.length >= 2)
+      return parts[parts.length - 2];
+    return last;
+  }
+
+  /** 课节段转模块号 */
+  function deriveModuleNumberFromSegment(seg) {
+    if (seg == null || seg === "") return null;
+    const s = String(seg);
+    const mm = s.match(/^m(\d+)$/i);
+    if (mm) return parseInt(mm[1], 10);
+    const ck = s.match(/^checkpoint(\d+)$/i);
+    if (ck) return parseInt(ck[1], 10);
+    const nums = s.match(/\d+/g);
+    if (nums && nums.length) return parseInt(nums[nums.length - 1], 10);
+    return null;
+  }
+
+  function moduleNumberForPlaceholder(courseSegment) {
+    const fromSeg = deriveModuleNumberFromSegment(courseSegment);
+    if (fromSeg != null) return fromSeg;
+    const n = detectModuleNumberFromPage() ?? getModuleFromLocationUrl();
+    if (n != null) return n;
+    return 1;
   }
 
   function stripHtmlToPlain(text) {
@@ -69,6 +338,7 @@
     return s0.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  /** 比对用归一化 */
   function normalizeForMatch(text) {
     if (!text) return "";
     return String(text)
@@ -78,7 +348,7 @@
       .toLowerCase();
   }
 
-  /** 规范化后比对用 */
+  /** 比对用宽松归一化 */
   function relaxForMatch(text) {
     return normalizeForMatch(text)
       .replace(/[,，.。?？!！:：;；、（）()[\]{}'"]/g, " ")
@@ -87,14 +357,103 @@
       .trim();
   }
 
+  /** 题干 HTML 内标签间插空格 */
+  function preJoinAdjacentHtmlTags(s) {
+    return String(s == null ? "" : s).replace(/></g, "> <");
+  }
+
+  /** 去掉题干前无障碍/状态前缀 */
+  function stripQuizAccessibilityStemNoise(text) {
+    let s = String(text || "")
+      .replace(/[\u200b\uFEFF]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    for (let i = 0; i < 4 && s; i++) {
+      const prev = s;
+      s = s.replace(/^(不完整|完成)\s+/gi, "").trim();
+      s = s.replace(/^问题\s*\d+\s*[:：．.、]?\s*/i, "").trim();
+      if (s === prev) break;
+    }
+    return s;
+  }
+
+  /** 页面可见题干转可比纯文本 */
+  function unifiedPlainFromVisibleStem(visibleStem) {
+    const raw = String(visibleStem || "").trim();
+    let s = raw
+      .replace(/[\u200b\uFEFF]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    s = stripQuizAccessibilityStemNoise(s);
+    if (s.length < 8) {
+      s = stripQuizAccessibilityStemNoise(raw.replace(/\s+/g, " ").trim());
+    }
+    return s.normalize("NFKC").replace(/\s+/g, " ").trim();
+  }
+
+  /** 题库题干 HTML 转可比纯文本 */
+  function unifiedPlainFromQuestionHtml(html) {
+    const joined = preJoinAdjacentHtmlTags(html || "");
+    let plain = stripHtmlToPlain(joined);
+    if (plain == null || plain === "") {
+      plain = String(joined)
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+    let s = String(plain)
+      .replace(/[\u200b\uFEFF]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    s = stripQuizAccessibilityStemNoise(s);
+    return s.normalize("NFKC").replace(/\s+/g, " ").trim();
+  }
+
+  /** 可见题干 exact key */
+  function stemUnifiedExactKeyFromVisibleStem(visibleStem) {
+    return normalizeMcqOptionPlainForExactCompare(
+      unifiedPlainFromVisibleStem(visibleStem)
+    );
+  }
+
+  /** 题库题干 HTML 的 exact key */
+  function stemUnifiedExactKeyFromQuestionHtml(qRaw) {
+    return normalizeMcqOptionPlainForExactCompare(
+      unifiedPlainFromQuestionHtml(qRaw || "")
+    );
+  }
+
+  function canonicalStemStrict(unifiedPlain) {
+    return normalizeForMatch(String(unifiedPlain || ""));
+  }
+
+  function normalizeQuestionHtmlForMatch(html) {
+    return canonicalStemStrict(unifiedPlainFromQuestionHtml(html));
+  }
+
+  /** 题干中提取思科式 MAC */
+  function extractMacLikeTokensFromStem(visibleStem) {
+    const re = /\b[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}\b/gi;
+    const out = [];
+    let m;
+    const s = String(visibleStem || "");
+    while ((m = re.exec(s)) !== null) {
+      const tok = m[0].toLowerCase();
+      if (out.indexOf(tok) < 0) out.push(tok);
+    }
+    return out;
+  }
+
   /** 从 _r2aMapId 解析小节号 */
   function extractMcqSectionFromR2aMapId(mapId) {
     if (mapId == null || mapId === "") return null;
-    const m = String(mapId).match(/mcq-(\d+(?:\.\d+)*)-/i);
+    const m = String(mapId).match(
+      /(?:mcq|objectMatching|matching)-(\d+(?:\.\d+)*)-/i
+    );
     return m ? m[1] : null;
   }
 
-  /** 页眉大纲与 map 小节号分段前缀一致则同节 */
+  /** 大纲小节对齐 */
   function outlineRefMatchesR2aMapSection(outlineRef, sectionFromMap) {
     const o = String(outlineRef || "").trim();
     const s = String(sectionFromMap || "").trim();
@@ -148,7 +507,7 @@
       }
     }
 
-    // 侧栏/大纲
+    // 侧栏大纲
     const sidebarSelectors =
       "aside, aside nav, [role='navigation'], [class*='sidebar' i], [class*='Sidebar' i], [class*='toc' i], [class*='outline' i], [class*='curriculum' i], [class*='course-outline' i], [data-testid*='sidebar' i]";
     for (const root of document.querySelectorAll(sidebarSelectors)) {
@@ -176,7 +535,7 @@
       if (mod != null) add(mod, 7);
     }
 
-    // 主区 h1/h2 行首小节号
+    // 主区标题行小节号
     for (const sel of ["main h1", "main h2", "[role='main'] h1", "[role='main'] h2"]) {
       for (const h of document.querySelectorAll(sel)) {
         if (h.closest && h.closest("#" + PANEL_ID)) continue;
@@ -253,7 +612,8 @@
   /** 是否存在 MCQ 相关 DOM*/
   function hasMcqCourseWidgetDom() {
     const sel =
-      '.mcq__title-inner, .mcq__body, .mcq__body-inner, .mcq__item, .mcq__item-text-inner, [class*="mcq__title" i], [class*="mcq__body" i], [class*="mcq__item"], [class*="mcq__stem" i], [class*="mcq__prompt" i], [class*="mcq__"]';
+      '.mcq__title-inner, .mcq__body, .mcq__body-inner, .mcq__item, .mcq__item-text-inner, [class*="mcq__title" i], [class*="mcq__body" i], [class*="mcq__item"], [class*="mcq__stem" i], [class*="mcq__prompt" i], [class*="mcq__"], ' +
+      OBJECT_MATCHING_DOM;
     try {
       if (document.querySelector(sel)) return true;
       return querySelectorAllDeep(document, sel, 32).length > 0;
@@ -273,11 +633,129 @@
     );
   }
 
-  /** 视口内是否有足够大的 MCQ 题干区 */
+  function normalizeQuizNavControlText(el) {
+    if (!el) return "";
+    return String(
+      (el.innerText || el.textContent || "")
+        .replace(/[\u200b\uFEFF]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+    );
+  }
+
+  /** 顶栏 Q 按钮解析题号 */
+  function parseTopQuizQButtonOrdinal(el) {
+    const raw = normalizeQuizNavControlText(el);
+    if (!raw) return null;
+    const compact = raw.replace(/\s+/g, "");
+    let m = compact.match(/^Q(\d{1,3})$/i);
+    if (m) return parseInt(m[1], 10);
+    m = raw.match(/^\s*Q\s*(\d{1,3})\b/i);
+    if (m) return parseInt(m[1], 10);
+    m = raw.match(/\bQ\s*(\d{1,3})\b/i);
+    if (m && raw.length <= 20) return parseInt(m[1], 10);
+    return null;
+  }
+
+  /** 顶栏测验 Q 导航控件 */
+  function isTopQuizQNavControl(el) {
+    if (!el || parseTopQuizQButtonOrdinal(el) == null) return false;
+    try {
+      const r = el.getBoundingClientRect();
+      if (r.bottom < -2 || r.top > 400) return false;
+      const vw = window.innerWidth || 800;
+      if (r.left > vw * 0.92) return false;
+    } catch (_e) {
+      return false;
+    }
+    return true;
+  }
+
+  function shouldExcludeFromTopQStripScan(el) {
+    if (!el || isInOurPanel(el)) return true;
+    if (isTopQuizQNavControl(el)) return false;
+    return isInCourseChromeSidebar(el);
+  }
+
+  /** 底部 "n 的 m 问题" 取当前 n */
+  function extractZhNthOfMTotalProgressQuestion() {
+    const parts = [];
+    const push = (root) => {
+      if (!root || isInOurPanel(root)) return;
+      try {
+        const t = (root.innerText || "").replace(/\s+/g, " ").trim();
+        if (t.length >= 4) parts.push(t);
+      } catch (_e) {
+        /*  */
+      }
+    };
+    push(document.body);
+    document
+      .querySelectorAll(
+        '[class*="footer" i], [class*="toolbar" i], [class*="sticky" i], [class*="bottom-bar" i], [class*="action-bar" i], [class*="submission" i], main, [role="main"], article'
+      )
+      .forEach(push);
+    const blob = parts.join(" ");
+    const re = /(\d+)\s*的\s*(\d+)\s*问题/g;
+    let best = null;
+    let m;
+    while ((m = re.exec(blob)) !== null) {
+      const cur = parseInt(m[1], 10);
+      const tot = parseInt(m[2], 10);
+      if (
+        Number.isFinite(cur) &&
+        Number.isFinite(tot) &&
+        cur > 0 &&
+        tot > 0 &&
+        cur <= tot &&
+        cur < 500 &&
+        tot < 500
+      )
+        best = cur;
+    }
+    return best;
+  }
+
+  function dedupeTopQStripByN(strip) {
+    const byN = Object.create(null);
+    for (const row of strip) {
+      const prev = byN[row.n];
+      if (!prev || row.area > prev.area) byN[row.n] = row;
+    }
+    return Object.keys(byN)
+      .map((k) => byN[k])
+      .sort((a, b) => a.n - b.n);
+  }
+
+  function collectTopQuizQNavStripRows() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const TOP_Q_STRIP_MAX_Y = 560;
+    const navCandidates = querySelectorAllDeep(
+      document,
+      'button, a[href], [role="tab"], [role="button"]',
+      260
+    );
+    const strip = [];
+    for (const el of navCandidates) {
+      if (shouldExcludeFromTopQStripScan(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.top > TOP_Q_STRIP_MAX_Y || r.bottom < 0) continue;
+      const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      if (visW * visH < 8) continue;
+      const v = parseTopQuizQButtonOrdinal(el);
+      if (v == null || v <= 0 || v >= 500) continue;
+      strip.push({ el, n: v, area: visW * visH });
+    }
+    return dedupeTopQStripByN(strip);
+  }
+
+  /** 大号 MCQ 题干区 */
   function hasVisibleMcqBodyInViewport() {
     const nodes = querySelectorAllDeep(
       document,
-      '.mcq__body, .mcq__body-inner, [class*="mcq__body" i]',
+      '.mcq__body, .mcq__body-inner, [class*="mcq__body" i], ' + OBJECT_MATCHING_DOM,
       48
     );
     const vw = window.innerWidth;
@@ -292,7 +770,7 @@
     return false;
   }
 
-  /** 视口内是否有可选选项控件 */
+  /** 选项控件可见 */
   function hasVisibleMcqChoiceSurface() {
     const sels = [
       "button[role='radio']",
@@ -305,6 +783,16 @@
       ".mcq__item-text-inner",
       '[class*="mcq__item" i]',
       '[class*="mcq__choice" i]',
+      "select",
+      '[class*="objectmatching" i] button',
+      '[class*="objectmatching" i] [role="combobox"]',
+      '[class*="object-matching" i] button',
+      '[class*="matching__" i] select',
+      '[class*="component-matching" i] select',
+      '[class*="component-matching" i] button',
+      "object-matching-view",
+      "matching-view",
+      "matching-dropdown-view",
     ];
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -322,15 +810,28 @@
     return false;
   }
 
-  /** 是否视为正在做题 */
+  /** 可答题测验中 */
   function hasVisibleActiveMcqSession() {
-    if (looksLikeSubmittedOrResultUi()) return false;
-    if (isMcqResultSummaryView()) return false;
     const bodyOk = hasVisibleMcqBodyInViewport();
     const choiceOk = hasVisibleMcqChoiceSurface();
-    if (!bodyOk && !choiceOk) return false;
+    if (!bodyOk && !choiceOk) {
+      // 无 MCQ 区时用顶栏/进度判会话
+      const qStrip = collectTopQuizQNavStripRows();
+      if (qStrip.length >= 2) {
+        // 结果/提交态顶栏不算答题中
+        if (looksLikeSubmittedOrResultUi() || isMcqResultSummaryView())
+          return false;
+        return true;
+      }
+      if (qStrip.length >= 1 && extractZhNthOfMTotalProgressQuestion() != null)
+        return true;
+      if (extractZhNthOfMTotalProgressQuestion() != null) return true;
+      return false;
+    }
     if (!bodyOk && choiceOk) {
       if (getLitBlockButtonQOrdinal() != null) return true;
+      if (collectTopQuizQNavStripRows().length >= 1) return true;
+      if (extractZhNthOfMTotalProgressQuestion() != null) return true;
       const titleRaw = getVisibleMcqTitleText();
       if (titleRaw && extractMcqOrdinalFromTitlePlain(titleRaw)) return true;
       if (
@@ -383,7 +884,8 @@
 
     const hasMcqLikeDom =
       !!document.querySelector(
-        '[class*="quiz" i], [class*="assessment" i], [class*="multiple" i][class*="choice" i], [data-testid*="question" i], [data-testid*="choice" i], [class*="mcq__"]'
+        '[class*="quiz" i], [class*="assessment" i], [class*="multiple" i][class*="choice" i], [data-testid*="question" i], [data-testid*="choice" i], [class*="mcq__"], ' +
+          OBJECT_MATCHING_DOM
       ) ||
       hasRadio ||
       querySelectorAllDeep(document, "[class*=\"mcq__\"]", 3).length > 0;
@@ -417,7 +919,7 @@
 
       if (isNetacadHost() && hasMcqLikeDom && blob.length > 35) return true;
 
-      // 弱关键词须配合 MCQ DOM 或单选，免阅读课误当测验
+      // 弱关键词须配合测验 DOM
       if (
         isNetacadHost() &&
         /(?:检查|检验|理解|问题|question|q\s*\d|请选择|下列|哪[一个几]|which)/i.test(
@@ -449,17 +951,49 @@
     return false;
   }
 
-  /** 轻量检测测验结果/提交态 */
+  /** 测验页全文，判结果态 */
+  function shadowInclusiveQuizBlob(maxLen) {
+    maxLen = maxLen || 80000;
+    const parts = [];
+    let total = 0;
+    const push = (t) => {
+      if (t == null || total >= maxLen) return;
+      const s = String(t).replace(/\s+/g, " ").trim();
+      if (!s) return;
+      const n = Math.min(s.length, maxLen - total);
+      if (n <= 0) return;
+      parts.push(s.slice(0, n));
+      total += n;
+    };
+    try {
+      const main = document.querySelector("main");
+      if (main && main.innerText) push(main.innerText);
+      if (document.body && document.body.innerText) push(document.body.innerText);
+      push(tryReadSameOriginIframesText(document, 0));
+      const hosts = querySelectorAllDeep(document, "*", 220);
+      for (const el of hosts) {
+        if (total >= maxLen) break;
+        if (!el || !el.shadowRoot) continue;
+        try {
+          const st =
+            el.shadowRoot.innerText ||
+            el.shadowRoot.textContent ||
+            "";
+          push(st);
+        } catch (_e) {
+          /* */
+        }
+      }
+    } catch (_e) {
+      /* */
+    }
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  /** 测验结果态 */
   function looksLikeSubmittedOrResultUi() {
     try {
-      let blob = "";
-      const main = document.querySelector("main");
-      if (main && main.innerText) blob += main.innerText.slice(0, 7000);
-      if (document.body && document.body.innerText) {
-        blob += "\n" + document.body.innerText.slice(0, 9000);
-      }
-      blob += "\n" + tryReadSameOriginIframesText(document, 0).slice(0, 5000);
-      blob = blob.replace(/\s+/g, " ").trim();
+      const blob = shadowInclusiveQuizBlob(72000);
       if (blob.length < 8) return false;
       if (
         /你的得分是\s*\d+\s*%|您的得分是\s*\d+\s*%|得分(?:为|是)\s*\d+\s*%/.test(
@@ -582,7 +1116,7 @@
     return false;
   }
 
-  /** 顶层 main 过短时不在此 frame 挂 UI */
+  /** main 过短不挂 UI */
   function shouldMountUi() {
     const isTop = window === window.top;
     if (!isTop) return true;
@@ -604,15 +1138,137 @@
     return Date.now() - Number(t) < NET_CAPTURE_TTL_MS;
   }
 
+  /** 是否已捕获 components.json 路径 */
+  function hasNetacadPathCapture() {
+    return (
+      isNetworkModuleFresh() &&
+      settings.netacadComponentsBasePath != null &&
+      String(settings.netacadComponentsBasePath).trim() !== ""
+    );
+  }
+
+  /** 从地址解析课节段 slug */
+  function getCourseContentSlugFromPageLocation() {
+    try {
+      const u = new URL(location.href);
+      let h = (u.hash || "").replace(/^#/, "");
+      if (h.indexOf("%") >= 0) {
+        try {
+          h = decodeURIComponent(h);
+        } catch (_e) {
+          /*  */
+        }
+      }
+      const blob = `${u.pathname}/${h}`.replace(/#/g, "/");
+      const m = blob.match(/\/courses\/content\/([^/]+)(?:\/|$)/i);
+      return m ? m[1] : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  /** 缓存路径与当前页课节是否一致 */
+  function netacadStoredPathMatchesCurrentPage() {
+    const urlSlug = getCourseContentSlugFromPageLocation();
+    if (urlSlug == null || urlSlug === "") return true;
+    const storedSlug = slugForModuleFromComponentsBasePath(
+      settings.netacadComponentsBasePath || ""
+    );
+    if (!storedSlug) return true;
+    return (
+      String(urlSlug).toLowerCase() === String(storedSlug).toLowerCase()
+    );
+  }
+
+  function hasUsableNetacadPathCapture() {
+    return hasNetacadPathCapture() && netacadStoredPathMatchesCurrentPage();
+  }
+
+  function pathHintFromSettings() {
+    if (!isNetworkModuleFresh()) return "默认";
+    if (
+      hasUsableNetacadPathCapture() ||
+      settings.netacadContentBase ||
+      settings.netacadCourseSegment
+    )
+      return "网络";
+    return "默认";
+  }
+
+  /** 捕获路径推断模块占位符 */
+  function resolvePlaceholderFromCapture() {
+    const n = settings.netacadModuleFromNet;
+    if (n != null && !Number.isNaN(Number(n))) return Number(n);
+    const p = String(settings.netacadComponentsBasePath || "").replace(
+      /\/+$/,
+      ""
+    );
+    const slug = slugForModuleFromComponentsBasePath(p);
+    if (slug && !segmentLooksLikeUuid(slug)) {
+      const d = deriveModuleNumberFromSegment(slug);
+      if (d != null) return d;
+    }
+    return (
+      detectModuleNumberFromPage() ?? getModuleFromLocationUrl() ?? 1
+    );
+  }
+
+  function canResolveComponentsTarget() {
+    if (hasUsableNetacadPathCapture()) return true;
+    return getDomInferredCourseSegment() != null;
+  }
+
+  /** 从地址解析 contentBase */
+  function getContentBaseFromPageLocation() {
+    try {
+      const u = new URL(location.href);
+      let h = (u.hash || "").replace(/^#/, "");
+      if (h.indexOf("%") >= 0) {
+        try {
+          h = decodeURIComponent(h);
+        } catch (_e) {
+          /*  */
+        }
+      }
+      const blob = `${u.pathname}/${h}`.replace(/#/g, "/");
+      const m = blob.match(/\/content\/(.+?)\/courses\/content\//i);
+      if (!m) return null;
+      const base = m[1].replace(/^\/+|\/+$/g, "");
+      return base || null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
   function getContentBase() {
-    return settings.netacadContentBase || CONTENT_BASE_FALLBACK;
+    bumpLocCourseSticky();
+    return (
+      locCourseSticky.contentBase ||
+      settings.netacadContentBase ||
+      CONTENT_BASE_FALLBACK
+    );
   }
 
   function getLocale() {
     return settings.netacadLocale || LOCALE_FALLBACK;
   }
 
-  /** 从 URL 参数或 hash 解析模块号 */
+  /** basePath 拼 components.json URL */
+  function absoluteComponentsUrlFromStoredPath() {
+    const p = String(settings.netacadComponentsBasePath || "").replace(
+      /\/+$/,
+      ""
+    );
+    if (!p) return null;
+    const lastSeg = p.split("/").filter(Boolean).pop() || "";
+    if (looksLikeLocaleSegment(lastSeg)) {
+      return `https://www.netacad.com${p}/components.json`;
+    }
+    const loc = getLocale();
+    return `https://www.netacad.com${p}/${loc}/components.json`;
+  }
+
+  /** URL/hash 解析模块号 */
   function getModuleFromLocationUrl() {
     try {
       const u = new URL(location.href);
@@ -621,10 +1277,10 @@
         const n = parseInt(q, 10);
         if (n > 0 && n < 99) return n;
       }
-      const hm = (u.hash || "").match(/\/courses\/content\/m(\d+)\b/i);
+      const hm = (u.hash || "").match(/\/courses\/content\/([^/]+)\b/i);
       if (hm) {
-        const n = parseInt(hm[1], 10);
-        if (n > 0 && n < 99) return n;
+        const n = deriveModuleNumberFromSegment(hm[1]);
+        if (n != null && n > 0 && n < 99) return n;
       }
     } catch (_e) {
       /*  */
@@ -632,30 +1288,33 @@
     return null;
   }
 
-  function getEffectiveModel() {
-    if (isNetworkModuleFresh() && settings.netacadModuleFromNet != null) {
-      return settings.netacadModuleFromNet;
-    }
-    const d = detectModuleNumberFromPage();
-    if (d != null) return d;
-    const fromLoc = getModuleFromLocationUrl();
-    if (fromLoc != null) return fromLoc;
+  /** 从地址解析课节路径段 */
+  function getCourseSegmentFromLocationUrl() {
+    return getCourseContentSlugFromPageLocation();
+  }
+
+  /** DOM/地址栏推断课节段 */
+  function getDomInferredCourseSegment() {
+    bumpLocCourseSticky();
+    const fromPath = locCourseSticky.courseSlug || getCourseSegmentFromLocationUrl();
+    if (fromPath && /^[a-z0-9][a-z0-9._-]{0,120}$/i.test(fromPath))
+      return fromPath;
+    const n = detectModuleNumberFromPage() ?? getModuleFromLocationUrl();
+    if (n != null) return `m${n}`;
     return null;
   }
 
-  function modelSourceLabel(eff) {
-    if (isNetworkModuleFresh() && settings.netacadModuleFromNet === eff) {
-      return "网络请求";
-    }
+  function modelSourceLabel(placeholderMod) {
+    if (hasUsableNetacadPathCapture()) return "网络请求";
     const d = detectModuleNumberFromPage();
-    if (d === eff) return "侧栏";
-    if (getModuleFromLocationUrl() === eff) return "地址栏/Hash";
+    if (d === placeholderMod) return "侧栏";
+    if (getModuleFromLocationUrl() === placeholderMod) return "地址栏/Hash";
     return "自动";
   }
 
   function sectionFromNearestPrecedingText(componentsInfo, mcqIdx, m) {
     let j = mcqIdx - 1;
-    while (j >= 0 && componentsInfo[j]._component === "mcq") j -= 1;
+    while (j >= 0 && isQuizQuestionComponent(componentsInfo[j])) j -= 1;
     if (j < 0 || componentsInfo[j]._component !== "text") return [null, null];
     const prev = componentsInfo[j];
     const t =
@@ -664,6 +1323,147 @@
       applyModulePlaceholder(prev.body || "", m)
     );
     return [t, b];
+  }
+
+  function objectMatchingFeedbackPlain(comp) {
+    const fb = comp._feedback || comp.feedback;
+    if (!fb) return null;
+    const raw = fb.correct || fb._correct || "";
+    return stripHtmlToPlain(raw) || null;
+  }
+
+  /** objectMatching 条目 */
+  function buildObjectMatchingEntry(componentInfo, unitTitle, unitBody) {
+    const body = componentInfo.body || "";
+    let items = componentInfo._items;
+    if (!Array.isArray(items)) items = [];
+    const categoryHints = [];
+    for (const it of items) {
+      const hq = (
+        stripHtmlToPlain(it.question) ||
+        String(it.question || "")
+          .replace(/<[^>]+>/g, " ")
+          .trim()
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (hq && categoryHints.indexOf(hq) < 0) categoryHints.push(hq);
+    }
+    const lines = [];
+    for (const it of items) {
+      const q = (
+        stripHtmlToPlain(it.question) ||
+        String(it.question || "")
+          .replace(/<[^>]+>/g, " ")
+          .trim()
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      const a = (
+        stripHtmlToPlain(it.answer) ||
+        String(it.answer || "")
+          .replace(/<[^>]+>/g, " ")
+          .trim()
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (q && a) lines.push(`${q}：${a}`);
+      else if (a) lines.push(a);
+    }
+    let correctDisplay = lines.join("\n").trim() || null;
+    if (!correctDisplay) {
+      correctDisplay = objectMatchingFeedbackPlain(componentInfo);
+    }
+    // objectMatching 题干
+    const 问题 =
+      categoryHints.length > 0
+        ? `${body}\n${categoryHints.join("\n")}`
+        : body;
+    const answerKeys = [];
+    for (const it of items) {
+      const ak = (
+        stripHtmlToPlain(it.answer) ||
+        String(it.answer || "")
+          .replace(/<[^>]+>/g, " ")
+          .trim()
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (ak && answerKeys.indexOf(ak) < 0) answerKeys.push(ak);
+    }
+    return {
+      所属单元: { 标题: unitTitle, 说明: unitBody },
+      问题,
+      正确答案: correctDisplay,
+      正确答案标号行: correctDisplay,
+      选项: lines.length ? lines : correctDisplay ? [correctDisplay] : [],
+      objectMatchingCategoryKeys:
+        categoryHints.length >= 2 ? categoryHints : null,
+      objectMatchingAnswerKeys: answerKeys.length ? answerKeys : null,
+    };
+  }
+
+  /** matching 转 OM 条目结构 */
+  function buildMatchingEntry(componentInfo, unitTitle, unitBody) {
+    const body = componentInfo.body || "";
+    let items = componentInfo._items;
+    if (!Array.isArray(items)) items = [];
+    const categoryHints = [];
+    const lines = [];
+    const answerKeys = [];
+    for (const it of items) {
+      const rowText = (
+        stripHtmlToPlain(it.text) ||
+        String(it.text || "")
+          .replace(/<[^>]+>/g, " ")
+          .trim()
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!rowText) continue;
+      const opts = Array.isArray(it._options) ? it._options : [];
+      let correctOpt = null;
+      for (let oi = 0; oi < opts.length; oi++) {
+        const o = opts[oi];
+        if (o && o._isCorrect === true) {
+          correctOpt = o;
+          break;
+        }
+      }
+      const ansText = correctOpt
+        ? (
+            stripHtmlToPlain(correctOpt.text) ||
+            String(correctOpt.text || "")
+              .replace(/<[^>]+>/g, " ")
+              .trim()
+          )
+            .replace(/\s+/g, " ")
+            .trim()
+        : "";
+      if (rowText && ansText) {
+        lines.push(rowText + "：" + ansText);
+        if (categoryHints.indexOf(rowText) < 0) categoryHints.push(rowText);
+        if (answerKeys.indexOf(ansText) < 0) answerKeys.push(ansText);
+      }
+    }
+    let correctDisplay = lines.join("\n").trim() || null;
+    if (!correctDisplay) {
+      correctDisplay = objectMatchingFeedbackPlain(componentInfo);
+    }
+    const 问题 =
+      categoryHints.length > 0
+        ? body + "\n" + categoryHints.join("\n")
+        : body;
+    return {
+      所属单元: { 标题: unitTitle, 说明: unitBody },
+      问题,
+      正确答案: correctDisplay,
+      正确答案标号行: correctDisplay,
+      选项: lines.length ? lines : correctDisplay ? [correctDisplay] : [],
+      objectMatchingCategoryKeys:
+        categoryHints.length >= 2 ? categoryHints : null,
+      objectMatchingAnswerKeys: answerKeys.length ? answerKeys : null,
+    };
   }
 
   function buildMcqEntry(componentInfo, unitTitle, unitBody) {
@@ -700,15 +1500,28 @@
     };
   }
 
+  /** 全部计分题条目列表 */
   function buildAllMcqEntries(componentsInfo, m) {
     const out = [];
     for (let idx = 0; idx < componentsInfo.length; idx++) {
-      if (componentsInfo[idx]._component !== "mcq") continue;
+      const comp = componentsInfo[idx];
+      if (!isQuizQuestionComponent(comp)) continue;
+      if (comp._isDeprecated === true) continue;
       const [ut, ub] = sectionFromNearestPrecedingText(componentsInfo, idx, m);
+      const entry =
+        comp._component === "mcq"
+          ? buildMcqEntry(comp, ut, ub)
+          : comp._component === "matching"
+            ? buildMatchingEntry(comp, ut, ub)
+            : buildObjectMatchingEntry(comp, ut, ub);
       out.push({
         index: idx,
-        r2aMapId: componentsInfo[idx]._r2aMapId || "",
-        entry: buildMcqEntry(componentsInfo[idx], ut, ub),
+        r2aMapId: comp._r2aMapId || "",
+        componentId:
+          comp._id != null && String(comp._id).trim() !== ""
+            ? String(comp._id).trim()
+            : "",
+        entry,
       });
     }
     return out;
@@ -755,17 +1568,22 @@
     return { list: out, didFilter: true };
   }
 
-  function componentsUrl(m, base, loc) {
-    return `https://www.netacad.com/content/${base}/courses/content/m${m}/${loc}/components.json`;
+  function componentsUrl(courseSegment, base, loc) {
+    const seg = String(courseSegment || "").replace(/^\/+|\/+$/g, "");
+    if (!seg) throw new Error("课节路径段为空");
+    return `https://www.netacad.com/content/${base}/courses/content/${seg}/${loc}/components.json`;
   }
 
-  async function loadComponents(m, base, loc) {
-    const url = componentsUrl(m, base, loc);
+  async function fetchComponentsAtUrl(url) {
     const res = await fetch(url, { credentials: "include" });
     if (!res.ok) throw new Error(`HTTP ${res.status}：${url}`);
     const data = await res.json();
     if (!Array.isArray(data)) throw new Error("components.json 格式异常（应为数组）");
     return data;
+  }
+
+  async function loadComponents(courseSegment, base, loc) {
+    return fetchComponentsAtUrl(componentsUrl(courseSegment, base, loc));
   }
 
   function isInOurPanel(el) {
@@ -811,10 +1629,11 @@
   let lastDomStemBlob = "";
   let lastDomOutlineRef = null;
 
-  /** 解析课节大纲号 供与 JSON 小节对齐 */
+  /** 课节大纲号 */
   function extractCourseOutlineRefNearMcq(skip) {
     const mcqSel =
-      '.mcq__body-inner, .mcq__body, [class*="mcq__body-inner"], [class*="mcq__body" i]';
+      '.mcq__body-inner, .mcq__body, [class*="mcq__body-inner"], [class*="mcq__body" i], ' +
+      OBJECT_MATCHING_DOM;
     const nodes = querySelectorAllDeep(document, mcqSel, 24);
     const pickFromLine = (line) => {
       const s = String(line || "").replace(/\s+/g, " ").trim();
@@ -880,18 +1699,41 @@
     return null;
   }
 
-  /** 从题干附近 DOM 解析当前题号 */
+  /** 从 DOM 解析当前题号 */
   function extractVisibleMcqQuestionNumber(skip) {
-    const bodies = querySelectorAllDeep(
-      document,
-      '.mcq__body-inner, .mcq__body, [class*="mcq__body" i]',
-      16
-    );
+    const sel =
+      '.mcq__body-inner, .mcq__body, [class*="mcq__body" i], ' +
+      OBJECT_MATCHING_DOM;
+    const bodies = querySelectorAllDeep(document, sel, 56);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const anchorY = vh * 0.4;
+    const scored = [];
     for (const bodyEl of bodies) {
       if (skip(bodyEl)) continue;
+      if (!domElLikelyRenderedForUser(bodyEl)) continue;
+      const r = bodyEl.getBoundingClientRect();
+      const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      const area = visW * visH;
+      if (visW * visH < 24) continue;
       const rawStem = (bodyEl.innerText || bodyEl.textContent || "").trim();
+      if (rawStem.length < 4) continue;
+      const midY =
+        (Math.max(r.top, 0) + Math.min(r.bottom, vh)) / 2 || r.top + r.height / 2;
+      const dist = Math.abs(midY - anchorY);
+      scored.push({ bodyEl, rawStem, area, dist });
+    }
+    scored.sort((a, b) => {
+      const strong = (x) => (x.area >= 72 ? 1 : 0);
+      const ds = strong(b) - strong(a);
+      if (ds !== 0) return ds;
+      return b.area - a.area || a.dist - b.dist;
+    });
+
+    const tryParseFromBody = (bodyEl, rawStem) => {
       const stemKey = rawStem.slice(0, Math.min(48, rawStem.length));
-      if (stemKey.length < 4) continue;
+      if (stemKey.length < 4) return null;
 
       let scope =
         bodyEl.closest('[class*="component"]') || bodyEl.parentElement;
@@ -941,6 +1783,12 @@
 
         scope = scope.parentElement;
       }
+      return null;
+    };
+
+    for (const { bodyEl, rawStem } of scored.slice(0, 10)) {
+      const hit = tryParseFromBody(bodyEl, rawStem);
+      if (hit != null) return hit;
     }
     return null;
   }
@@ -1104,6 +1952,7 @@
           '[class*="mcq__prompt" i]',
           '[class*="mcq__question" i]',
           '[class*="mcq__statement" i]',
+          OBJECT_MATCHING_DOM,
         ].join(", "),
         80
       ).forEach((node) => {
@@ -1144,7 +1993,7 @@
     return s;
   }
 
-  /** 主内容区多段文本，供题干模糊匹配 */
+  /** 主内容区多段文本 */
   function getQuizPageTextForMatch() {
     const chunks = [];
     const pushChunk = (t, max) => {
@@ -1162,7 +2011,8 @@
 
     querySelectorAllDeep(
       document,
-      '.mcq__body, .mcq__body-inner, [class*="mcq__body" i], .mcq__item-text-inner, .mcq__item, [class*="mcq__item"]',
+      '.mcq__body, .mcq__body-inner, [class*="mcq__body" i], .mcq__item-text-inner, .mcq__item, [class*="mcq__item"], ' +
+        OBJECT_MATCHING_DOM,
       60
     ).forEach((n) => {
       if (!isInOurPanel(n)) {
@@ -1183,7 +2033,7 @@
 
     pushChunk(tryReadSameOriginIframesText(), 15000);
 
-    // 主区域整段
+    // main 全文
     const mainSelectors = [
       "main",
       "[role='main']",
@@ -1201,7 +2051,7 @@
       });
     }
 
-    // 主列 elementsFromPoint 采样
+    // 主列采样
     const w = window.innerWidth;
     const h = window.innerHeight;
     const xs = [0.48, 0.52, 0.56, 0.44].map((r) => Math.floor(w * r));
@@ -1236,30 +2086,544 @@
     return merged.replace(/\s+/g, " ").trim();
   }
 
-  /** 视口内面积最大的可见题干块 */
-  function getVisibleMcqStemText() {
+  /** 是否像对用户可见的渲染节点 */
+  function domElLikelyRenderedForUser(el) {
+    if (!el || !el.isConnected) return false;
+    try {
+      if (typeof el.checkVisibility === "function") {
+        return el.checkVisibility({
+          checkOpacity: true,
+          checkVisibilityCSS: true,
+        });
+      }
+    } catch (_e) {
+      /*  */
+    }
+    let cur = el;
+    for (let d = 0; d < 14 && cur; d++) {
+      try {
+        const st = window.getComputedStyle(cur);
+        if (st.display === "none" || st.visibility === "hidden") return false;
+        if (parseFloat(st.opacity) === 0) return false;
+      } catch (_e) {
+        return false;
+      }
+      cur = cur.parentElement;
+    }
+    return true;
+  }
+
+  /** 标题文案解析题号 */
+  function extractQuizOrdinalFromTitlePlain(plain) {
+    if (plain == null) return null;
+    const p = String(plain)
+      .replace(/[\u200b\uFEFF]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!p) return null;
+    const reQ =
+      /(?:^|[\s:：])(?:问题|question)\s*[:：]?\s*(\d+)(?!\d)(?:\s|$|:|：|\.|，|,)/i;
+    const m = p.match(reQ);
+    if (m) {
+      const v = parseInt(m[1], 10);
+      if (Number.isFinite(v) && v > 0 && v < 500) return v;
+    }
+    const compact = p.replace(/\s+/g, "");
+    const m2 = compact.match(/^Q(\d+)(?!\d)$/i);
+    if (m2) {
+      const v = parseInt(m2[1], 10);
+      if (Number.isFinite(v) && v > 0 && v < 500) return v;
+    }
+    return null;
+  }
+
+  /** 标题是否为题号 n */
+  function titlePlainMatchesQuizOrdinal(plain, n) {
+    if (plain == null || !Number.isFinite(n) || n < 1 || n >= 500) return false;
+    return extractQuizOrdinalFromTitlePlain(plain) === n;
+  }
+
+  /** MCQ 正文所属组件题号 */
+  function quizOrdinalForMcqBodyInner(bodyEl) {
+    if (!bodyEl) return null;
+    const host =
+      bodyEl.closest("[class*='component-mcq' i]") ||
+      bodyEl.closest(".component-mcq") ||
+      bodyEl.closest("[class*='component' i]");
+    if (!host || isInOurPanel(host)) return null;
+    const t = host.querySelector(
+      ".mcq__title-inner, [class*='mcq__title-inner' i], [class*='mcq__title' i]"
+    );
+    if (!t) return null;
+    const plain =
+      cleanMcqTitleInnerText(mcqTitleInnerPlainFromNode(t)) ||
+      String(t.innerText || "")
+        .replace(/\s+/g, " ")
+        .trim();
+    return extractQuizOrdinalFromTitlePlain(plain);
+  }
+
+  /** data-socialgoodpulse-id 对 JSON _id */
+  function extractDomSocialGoodPulseIdForQuizOrdinal(ordinalStr) {
+    const n = parseInt(String(ordinalStr).trim(), 10);
+    if (!Number.isFinite(n) || n < 1 || n >= 500) return null;
+    const hosts = querySelectorAllDeep(document, "[data-socialgoodpulse-id]", 100);
+    let bestId = null;
+    let bestArea = -1;
+    for (let hi = 0; hi < hosts.length; hi++) {
+      const host = hosts[hi];
+      if (
+        !host ||
+        isInOurPanel(host) ||
+        !domElLikelyRenderedForUser(host)
+      )
+        continue;
+      const cls = String(host.className || "");
+      if (!/\bis-question\b/i.test(cls)) continue;
+
+      const titles = querySelectorAllDeep(
+        host,
+        ".mcq__title-inner, [class*='mcq__title-inner'], .objectMatching__title-inner, [class*='objectMatching__title-inner'], .matching__title-inner, [class*='matching__title-inner']",
+        8
+      );
+      let ordMatch = false;
+      for (let ti = 0; ti < titles.length; ti++) {
+        const t = titles[ti];
+        if (!t || isInOurPanel(t)) continue;
+        const plain =
+          cleanMcqTitleInnerText(mcqTitleInnerPlainFromNode(t)) ||
+          String(t.innerText || "")
+            .replace(/\s+/g, " ")
+            .trim();
+        if (extractQuizOrdinalFromTitlePlain(plain) === n) {
+          ordMatch = true;
+          break;
+        }
+      }
+      if (!ordMatch) continue;
+
+      const area = elementVisibleViewportArea(host);
+      if (area < 64) continue;
+      const id = host.getAttribute("data-socialgoodpulse-id");
+      if (!id || !String(id).trim()) continue;
+      if (area > bestArea) {
+        bestArea = area;
+        bestId = String(id).trim();
+      }
+    }
+    return bestId;
+  }
+
+  /** pool 内按 componentId 命中一行 */
+  function findPoolRowByComponentDomId(ordinalStr, pool) {
+    const cid = extractDomSocialGoodPulseIdForQuizOrdinal(ordinalStr);
+    if (!cid || !pool || !pool.length) return null;
+    const hits = [];
+    for (let i = 0; i < pool.length; i++) {
+      const r = pool[i];
+      if (r && r.componentId && String(r.componentId) === cid) hits.push(r);
+    }
+    if (hits.length === 1) return hits[0];
+    return null;
+  }
+
+  /** 按标题 "问题 n" 在 scope 取题干 */
+  function stemTextAnchoredByProblemTitle(n) {
+    if (!Number.isFinite(n) || n < 1 || n >= 500) return null;
+    const titleSels = [
+      ".mcq__title-inner",
+      '[class*="mcq__title-inner"]',
+      '[class*="mcq__title" i]',
+      ".matching__title-inner",
+      '[class*="matching__title-inner"]',
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      '[role="heading"]',
+    ].join(", ");
+    const titles = querySelectorAllDeep(document, titleSels, 120);
+    let globalBestStem = null;
+    let globalBestScore = -1;
+    for (const t of titles) {
+      if (
+        !t ||
+        isInOurPanel(t) ||
+        isInCourseChromeSidebar(t) ||
+        !domElLikelyRenderedForUser(t)
+      )
+        continue;
+      const plain =
+        cleanMcqTitleInnerText(mcqTitleInnerPlainFromNode(t)) ||
+        String(t.innerText || "")
+          .replace(/\s+/g, " ")
+          .trim();
+      if (!titlePlainMatchesQuizOrdinal(plain, n)) continue;
+
+      const scopes = [];
+      const comp = t.closest("[class*='component']");
+      if (comp) scopes.push(comp);
+      const art = t.closest("article");
+      if (art) scopes.push(art);
+      const mainEl = t.closest("main,[role='main']");
+      if (mainEl) scopes.push(mainEl);
+      scopes.push(t.parentElement);
+
+      const bodySel = [
+        ".component__body-inner.mcq__body-inner",
+        ".mcq__body-inner",
+        "[class*='mcq__body-inner']",
+        ".mcq__body",
+        "[class*='mcq__body' i]",
+        ".matching__body-inner",
+        "[class*='matching__body-inner' i]",
+        '[class*="objectmatching" i]',
+        '[class*="object-matching" i]',
+        '[class*="matching__" i]',
+        '[class*="component-objectmatching" i]',
+        '[class*="component-matching" i]',
+        '[class*="component__matching" i]',
+      ].join(", ");
+
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let bestStem = null;
+      let bestScore = -1;
+      for (const scope of scopes) {
+        if (!scope) continue;
+        const bodies = querySelectorAllDeep(scope, bodySel, 72);
+        for (const b of bodies) {
+          if (!b || isInOurPanel(b) || !domElLikelyRenderedForUser(b)) continue;
+          if (!(t.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING))
+            continue;
+          const stem = String(b.innerText || "")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (stem.length < 8 || stem.length > 12000) continue;
+          const cls = String(b.className || "");
+          const isOm =
+            /objectmatching|object-matching|matching__|component-objectmatching|component-matching|component__matching/i.test(
+              cls
+            );
+          let rank = 2;
+          if (cls.includes("mcq__body-inner") || cls.includes("body-inner"))
+            rank = 4;
+          else if (isOm) rank = 3;
+          const br = b.getBoundingClientRect();
+          const visW = Math.max(0, Math.min(br.right, vw) - Math.max(br.left, 0));
+          const visH = Math.max(
+            0,
+            Math.min(br.bottom, vh) - Math.max(br.top, 0)
+          );
+          const area = visW * visH;
+          if (area < 40) continue;
+          const macN = extractMacLikeTokensFromStem(stem).length;
+          let score = area;
+          if (macN >= 2) score += 5e10;
+          else if (macN === 1) score += 2e8;
+          if (isOm) score += 1e7;
+          score += rank * 1e4;
+          if (score > bestScore) {
+            bestScore = score;
+            bestStem = stem;
+          }
+        }
+      }
+      if (bestStem && bestScore > globalBestScore) {
+        globalBestScore = bestScore;
+        globalBestStem = bestStem;
+      }
+    }
+    return globalBestStem;
+  }
+
+  /** 视口可见面积 */
+  function elementVisibleViewportArea(el) {
+    if (!el || !domElLikelyRenderedForUser(el)) return 0;
+    try {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const r = el.getBoundingClientRect();
+      const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      return visW * visH;
+    } catch (_e) {
+      return 0;
+    }
+  }
+
+  /** matching 下拉 light 宿主 */
+  function isLightDomMatchingDropdownHost(el) {
+    if (!el) return false;
+    const c = String(el.className || "");
+    if (!/\bis-question\b/i.test(c)) return false;
+    if (/\bobjectmatching__inner\b/i.test(c)) return false;
+    return /\bmatching__inner\b/i.test(c);
+  }
+
+  function maxMatchingLikeHostVisibleArea() {
+    let best = 0;
+    const hosts = querySelectorAllDeep(
+      document,
+      "matching-view, object-matching-view",
+      16
+    );
+    for (let i = 0; i < hosts.length; i++) {
+      const a = elementVisibleViewportArea(hosts[i]);
+      if (a > best) best = a;
+    }
+    const inners = querySelectorAllDeep(document, "[data-socialgoodpulse-id]", 48);
+    for (let j = 0; j < inners.length; j++) {
+      const h = inners[j];
+      if (!isLightDomMatchingDropdownHost(h)) continue;
+      const a = elementVisibleViewportArea(h);
+      if (a > best) best = a;
+    }
+    return best;
+  }
+
+  /** MCQ 题干区最大面积 */
+  function maxMcqBodyInnerVisibleArea() {
+    let best = 0;
     const nodes = querySelectorAllDeep(
       document,
       '.mcq__body-inner, [class*="mcq__body-inner"], .mcq__body, [class*="mcq__body" i]',
-      28
+      64
+    );
+    for (let i = 0; i < nodes.length; i++) {
+      const a = elementVisibleViewportArea(nodes[i]);
+      if (a > best) best = a;
+    }
+    return best;
+  }
+
+  /** matching-view 聚合题干 */
+  function collectAggregatedMatchingLikeStemFromHost(mvHost) {
+    if (!mvHost || isInOurPanel(mvHost) || !domElLikelyRenderedForUser(mvHost))
+      return null;
+    if (elementVisibleViewportArea(mvHost) < 200) return null;
+    const sr = mvHost.shadowRoot;
+    if (!sr) return null;
+    const bodyInner =
+      sr.querySelector(".matching__body-inner") ||
+      sr.querySelector(".objectMatching__body-inner") ||
+      sr.querySelector("[class*='matching__body-inner' i]") ||
+      sr.querySelector("[class*='objectMatching__body-inner' i]");
+    const bodyTxt = bodyInner
+      ? String(bodyInner.innerText || bodyInner.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim()
+      : "";
+    const dds = sr.querySelectorAll(
+      "matching-dropdown-view, object-matching-dropdown-view"
+    );
+    const rowLines = [];
+    for (let di = 0; di < dds.length; di++) {
+      const dd = dds[di];
+      const dsr = dd.shadowRoot;
+      if (!dsr) continue;
+      const titleEl =
+        dsr.querySelector(
+          ".matching__item-title .matching__item-title_inner"
+        ) || dsr.querySelector(".matching__item-title_inner");
+      const line = String(
+        (titleEl && (titleEl.innerText || titleEl.textContent)) || ""
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (
+        line.length >= 2 &&
+        !/请选择一个选项|请选择|select an option/i.test(line)
+      )
+        rowLines.push(line);
+    }
+    if (!bodyTxt && rowLines.length < 2) return null;
+    const pack = [bodyTxt].concat(rowLines).filter(Boolean).join("\n");
+    const t = pack.replace(/\s+/g, " ").trim();
+    return t.length >= 16 ? t : null;
+  }
+
+  /** matching 下拉聚合题干 */
+  function collectAggregatedMatchingStemFromLightHost(lightHost) {
+    if (
+      !lightHost ||
+      isInOurPanel(lightHost) ||
+      !domElLikelyRenderedForUser(lightHost) ||
+      !isLightDomMatchingDropdownHost(lightHost)
+    )
+      return null;
+    if (elementVisibleViewportArea(lightHost) < 80) return null;
+
+    const bodyNodes = querySelectorAllDeep(
+      lightHost,
+      ".matching__body-inner, [class*='matching__body-inner' i]",
+      8
+    );
+    let bodyTxt = "";
+    for (let bi = 0; bi < bodyNodes.length; bi++) {
+      const b = bodyNodes[bi];
+      const tx = String(b.innerText || b.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (tx.length > bodyTxt.length) bodyTxt = tx;
+    }
+
+    const dds = querySelectorAllDeep(
+      lightHost,
+      "matching-dropdown-view, object-matching-dropdown-view",
+      40
+    );
+    const rowLines = [];
+    for (let di = 0; di < dds.length; di++) {
+      const dd = dds[di];
+      const dsr = dd.shadowRoot;
+      if (!dsr) continue;
+      const titleEl =
+        dsr.querySelector(
+          ".matching__item-title .matching__item-title_inner"
+        ) || dsr.querySelector(".matching__item-title_inner");
+      const line = String(
+        (titleEl && (titleEl.innerText || titleEl.textContent)) || ""
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (
+        line.length >= 2 &&
+        !/请选择一个选项|请选择|select an option/i.test(line)
+      )
+        rowLines.push(line);
+    }
+    if (!bodyTxt && rowLines.length < 2) return null;
+    const pack = [bodyTxt].concat(rowLines).filter(Boolean).join("\n");
+    const t = pack.replace(/\s+/g, " ").trim();
+    return t.length >= 16 ? t : null;
+  }
+
+  function collectAggregatedMatchingLikeStem() {
+    const mv = querySelectorAllDeep(document, "matching-view", 8);
+    for (let i = 0; i < mv.length; i++) {
+      const hit = collectAggregatedMatchingLikeStemFromHost(mv[i]);
+      if (hit) return hit;
+    }
+    const om = querySelectorAllDeep(document, "object-matching-view", 8);
+    for (let j = 0; j < om.length; j++) {
+      const hit = collectAggregatedMatchingLikeStemFromHost(om[j]);
+      if (hit) return hit;
+    }
+    const lightHosts = querySelectorAllDeep(document, "[data-socialgoodpulse-id]", 32);
+    for (let k = 0; k < lightHosts.length; k++) {
+      const hit = collectAggregatedMatchingStemFromLightHost(lightHosts[k]);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  /** 当前屏题干文本 */
+  function getVisibleMcqStemText(hintOrdinal) {
+    const hn =
+      hintOrdinal != null ? parseInt(String(hintOrdinal).trim(), 10) : NaN;
+    const matArea = maxMatchingLikeHostVisibleArea();
+    const mcqArea = maxMcqBodyInnerVisibleArea();
+    const matMcqSum = matArea + mcqArea + 1;
+    const matchingAreaShare = matMcqSum > 0 ? matArea / matMcqSum : 0;
+    const matchingVisiblyDominatesMcq =
+      matArea >= 200 && matArea >= mcqArea * 0.88 + 48;
+    const almostNoMcqBody = mcqArea < 420;
+    const matchingTakesRoughHalfOrMore = matchingAreaShare >= 0.38;
+    const matchingNotClearlyBehindMcq =
+      matArea + 48 >= mcqArea * 0.9;
+    const useMatchingAggregate =
+      matArea >= 200 &&
+      matchingNotClearlyBehindMcq &&
+      (almostNoMcqBody ||
+        matchingTakesRoughHalfOrMore ||
+        matchingVisiblyDominatesMcq);
+
+    const aggStem = useMatchingAggregate
+      ? collectAggregatedMatchingLikeStem()
+      : null;
+
+    let anchored = null;
+    if (Number.isFinite(hn) && hn >= 1 && hn < 500)
+      anchored = stemTextAnchoredByProblemTitle(hn);
+
+    if (anchored && anchored.length >= 8) {
+      if (useMatchingAggregate && aggStem) return aggStem;
+      return anchored;
+    }
+
+    if (aggStem) return aggStem;
+
+    const nodes = querySelectorAllDeep(
+      document,
+      '.mcq__body-inner, [class*="mcq__body-inner"], .mcq__body, [class*="mcq__body" i], ' +
+        OBJECT_MATCHING_DOM,
+      52
     );
     let best = "";
-    let bestArea = 0;
+    let bestScore = 0;
+    let mac2Best = "";
+    let mac2Area = 0;
+    let mac1OmBest = "";
+    let mac1OmScore = 0;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    for (const n of nodes) {
-      if (!n || isInOurPanel(n)) continue;
-      const r = n.getBoundingClientRect();
+    for (const node of nodes) {
+      if (!node || isInOurPanel(node) || !domElLikelyRenderedForUser(node))
+        continue;
+      if (Number.isFinite(hn) && hn >= 1 && hn < 500) {
+        const tn = String(node.tagName || "").toLowerCase();
+        const cl = String(node.className || "");
+        const isMatchingLikeDom =
+          /objectmatching|object-matching|matching__|component-objectmatching|component-matching|component__matching/i.test(
+            cl
+          ) ||
+          tn === "object-matching-view" ||
+          tn === "matching-view";
+        if (!isMatchingLikeDom) {
+          const bodyOrd = quizOrdinalForMcqBodyInner(node);
+          if (bodyOrd != null && bodyOrd !== hn) continue;
+        }
+      }
+      const r = node.getBoundingClientRect();
       const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
       const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
       const area = visW * visH;
-      const t = (n.innerText || n.textContent || "").trim();
-      if (t.length < 12 || area < 40) continue;
-      if (area > bestArea) {
-        bestArea = area;
-        best = t;
+      const txt = (node.innerText || node.textContent || "").trim();
+      if (txt.length < 8 || area < 40) continue;
+      const cls = String(node.className || "");
+      const isOm =
+        /objectmatching|object-matching|matching__|component-objectmatching|component-matching|component__matching/i.test(
+          cls
+        );
+      const macN = extractMacLikeTokensFromStem(txt).length;
+      if (macN >= 2) {
+        if (area > mac2Area) {
+          mac2Area = area;
+          mac2Best = txt;
+        }
+      }
+      if (macN >= 1 && isOm) {
+        const s = area * 2 + macN * 1e6;
+        if (s > mac1OmScore) {
+          mac1OmScore = s;
+          mac1OmBest = txt;
+        }
+      }
+      if (txt.length < 12) continue;
+      const innerBoost =
+        cls.includes("mcq__body-inner") || cls.includes("body-inner")
+          ? 1.28
+          : 1;
+      const omBoost = isOm ? 1.15 : 1;
+      const score = area * innerBoost * omBoost;
+      if (score > bestScore) {
+        bestScore = score;
+        best = txt;
       }
     }
+    if (mac2Best) return mac2Best;
+    if (mac1OmBest) return mac1OmBest;
     return best || null;
   }
 
@@ -1294,23 +2658,30 @@
   function getVisibleMcqTitleText() {
     const nodes = querySelectorAllDeep(
       document,
-      '.mcq__title-inner, [class*="mcq__title-inner"], [class*="mcq__title" i]',
+      '.mcq__title-inner, [class*="mcq__title-inner"], [class*="mcq__title" i], ' +
+        OBJECT_MATCHING_DOM +
+        ' [class*="title" i]',
       48
     );
     let best = "";
-    let bestArea = 0;
+    let bestScore = -1e9;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const anchorY = vh * 0.32;
     for (const n of nodes) {
-      if (!n || isInOurPanel(n)) continue;
+      if (!n || isInOurPanel(n) || !domElLikelyRenderedForUser(n)) continue;
       const r = n.getBoundingClientRect();
       const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
       const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
       const area = visW * visH;
       const t = cleanMcqTitleInnerText(mcqTitleInnerPlainFromNode(n));
-      if (!t || t.length < 2 || area < 25) continue;
-      if (area > bestArea) {
-        bestArea = area;
+      if (!t || t.length < 2 || area < 20) continue;
+      const midY =
+        (Math.max(r.top, 0) + Math.min(r.bottom, vh)) / 2 || r.top + r.height / 2;
+      const dist = Math.abs(midY - anchorY);
+      const score = area * 2.2 - dist;
+      if (score > bestScore) {
+        bestScore = score;
         best = t;
       }
     }
@@ -1319,32 +2690,9 @@
 
   /** 顶栏 Q 条最大 Qn */
   function getMaxTopStripQNavOrdinal() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const TOP_Q_STRIP_MAX_Y = 560;
-    const navCandidates = querySelectorAllDeep(
-      document,
-      'button, a[href], [role="tab"], [role="button"]',
-      200
-    );
-    let maxN = 0;
-    for (const el of navCandidates) {
-      if (!el || isInOurPanel(el) || isInCourseChromeSidebar(el)) continue;
-      const r = el.getBoundingClientRect();
-      if (r.top > TOP_Q_STRIP_MAX_Y || r.bottom < 0) continue;
-      const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
-      const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
-      if (visW * visH < 12) continue;
-      const t = (el.innerText || el.textContent || "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (!/^Q\s*\d+$/i.test(t)) continue;
-      const qm = t.match(/^Q\s*(\d+)$/i);
-      if (!qm) continue;
-      const v = parseInt(qm[1], 10);
-      if (v > 0 && v < 500 && v > maxN) maxN = v;
-    }
-    return maxN;
+    const strip = collectTopQuizQNavStripRows();
+    if (!strip.length) return 0;
+    return Math.max(...strip.map((s) => s.n));
   }
 
   /** 题号大于顶栏最大 Qn 则丢弃 */
@@ -1353,11 +2701,15 @@
     const v = parseInt(String(ordStr).trim(), 10);
     if (!Number.isFinite(v) || v < 1) return ordStr;
     const cap = getMaxTopStripQNavOrdinal();
-    if (cap >= 1 && v > cap) return null;
+    if (cap >= 1 && v > cap) {
+      const zhCur = extractZhNthOfMTotalProgressQuestion();
+      if (zhCur === v) return ordStr;
+      return null;
+    }
     return ordStr;
   }
 
-  /** Lit block-button 导航上的当前题序 */
+  /** block-button 题序 */
   function getLitBlockButtonQOrdinal() {
     const nodes = querySelectorAllDeep(
       document,
@@ -1370,10 +2722,9 @@
     );
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const rows = [];
+    const raw = [];
     for (const el of nodes) {
       if (!el || isInOurPanel(el)) continue;
-      /* 主列容器勿当侧栏过滤 */
       const r = el.getBoundingClientRect();
       const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
       const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
@@ -1385,13 +2736,27 @@
         .replace(/[\u200b\uFEFF]/g, "")
         .replace(/\s+/g, " ")
         .trim();
-      let n = null;
-      const qm = t.match(/\bQ\s*(\d+)\b/i);
-      if (qm) n = parseInt(qm[1], 10);
-      if (n == null || !Number.isFinite(n)) n = d >= 1 ? d : d + 1;
-      if (n <= 0 || n >= 500) continue;
       const hasActive = /\bactive-block\b/i.test(String(el.className || ""));
-      rows.push({ el, n, hasActive, area: visW * visH });
+      raw.push({ el, d, t, hasActive, area: visW * visH });
+    }
+    if (!raw.length) return null;
+
+    const minD = Math.min(...raw.map((x) => x.d));
+    const rows = [];
+    for (const row of raw) {
+      let n = null;
+      const qm = row.t.match(/\bQ\s*(\d+)\b/i);
+      if (qm) n = parseInt(qm[1], 10);
+      if (n == null || !Number.isFinite(n)) {
+        n = litBlockDataIndexToQuestionOrdinal(row.d, minD);
+      }
+      if (n <= 0 || n >= 500) continue;
+      rows.push({
+        el: row.el,
+        n,
+        hasActive: row.hasActive,
+        area: row.area,
+      });
     }
     if (!rows.length) return null;
 
@@ -1440,8 +2805,14 @@
     if (el.getAttribute("aria-checked") === "true") return true;
     if (el.getAttribute("data-state") === "active") return true;
     if (el.getAttribute("data-selected") === "true") return true;
+    if (el.getAttribute("data-active") === "true") return true;
     const cn = el.className && String(el.className);
-    if (cn && /\b(active|selected|current|is-active|is-selected)\b/i.test(cn))
+    if (
+      cn &&
+      /\b(active|selected|current|is-active|is-selected|active-block|tab-active|btn-active|chip-active)\b/i.test(
+        cn
+      )
+    )
       return true;
     try {
       if (
@@ -1458,7 +2829,7 @@
     return false;
   }
 
-  /** 顶栏 Q 条或 active-block 上的题序 */
+  /** 顶栏或 block 题序 */
   function getActiveLessonBlockQOrdinal() {
     const litBlock = getLitBlockButtonQOrdinal();
     if (litBlock != null) return litBlock;
@@ -1466,32 +2837,7 @@
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    /* 顶栏 Q 条 y 上限 */
-    const TOP_Q_STRIP_MAX_Y = 560;
-    const navCandidates = querySelectorAllDeep(
-      document,
-      'button, a[href], [role="tab"], [role="button"]',
-      200
-    );
-    const strip = [];
-    for (const el of navCandidates) {
-      if (!el || isInOurPanel(el) || isInCourseChromeSidebar(el)) continue;
-      const r = el.getBoundingClientRect();
-      if (r.top > TOP_Q_STRIP_MAX_Y || r.bottom < 0) continue;
-      const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
-      const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
-      const area = visW * visH;
-      if (area < 12) continue;
-      const t = (el.innerText || el.textContent || "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (!/^Q\s*\d+$/i.test(t)) continue;
-      const qm = t.match(/^Q\s*(\d+)$/i);
-      if (!qm) continue;
-      const v = parseInt(qm[1], 10);
-      if (v <= 0 || v >= 500) continue;
-      strip.push({ el, n: v, area });
-    }
+    const strip = collectTopQuizQNavStripRows();
 
     let navBest = null;
     let navArea = 0;
@@ -1504,6 +2850,15 @@
     }
     if (navBest != null) return capOrdinalStringByTopStripQNav(navBest);
 
+    const zhProg = extractZhNthOfMTotalProgressQuestion();
+    if (
+      zhProg != null &&
+      strip.length >= 2 &&
+      strip.some((s) => s.n === zhProg)
+    ) {
+      return capOrdinalStringByTopStripQNav(String(zhProg));
+    }
+
     const stripMaxN = strip.length ? Math.max(...strip.map((s) => s.n)) : 0;
     const titleOrd = extractMcqOrdinalFromTitlePlain(
       getVisibleMcqTitleText() || ""
@@ -1512,7 +2867,7 @@
       const want = parseInt(titleOrd, 10);
       if (Number.isFinite(want) && want > 0) {
         if (stripMaxN >= 1 && want > stripMaxN) {
-          /* 标题题号大于 Q 条 */
+          // 超顶栏丢弃
         } else {
           const hits = strip.filter((r) => r.n === want);
           if (hits.length === 1) return capOrdinalStringByTopStripQNav(String(want));
@@ -1538,6 +2893,7 @@
       ].join(", "),
       48
     );
+    const blockIdxMin = computeLitBlockDataIndexMin();
     let best = null;
     let bestArea = 0;
     for (const el of nodes) {
@@ -1560,7 +2916,8 @@
         const di = el.getAttribute("data-index");
         if (di != null && /^\d+$/.test(String(di).trim())) {
           const d = parseInt(String(di).trim(), 10);
-          if (d >= 0 && d < 500) n = d >= 1 ? d : d + 1;
+          if (d >= 0 && d < 500)
+            n = litBlockDataIndexToQuestionOrdinal(d, blockIdxMin);
         }
       }
       if (n != null && n > 0 && n < 500 && area >= bestArea) {
@@ -1606,20 +2963,36 @@
     return null;
   }
 
-  /** 当前题序：block/顶栏 Q, 标题, lastDom；tick 里与 scopeMcqs[n-1] 对齐 */
+  /** 综合解析当前题序 */
   function resolveMcqOrdinalContext() {
-    if (!hasVisibleActiveMcqSession()) {
+    const sessionOk = hasVisibleActiveMcqSession();
+    const stripLen = collectTopQuizQNavStripRows().length;
+    const zhProg = extractZhNthOfMTotalProgressQuestion();
+    if (!sessionOk && stripLen < 1 && zhProg == null) {
       return { ordinal: null };
     }
 
     const block = getActiveLessonBlockQOrdinal();
     if (block != null) return { ordinal: block };
 
+    // 题号先标题后正文
     const fromTitle = extractMcqOrdinalFromTitlePlain(
       getVisibleMcqTitleText() || ""
     );
     if (fromTitle != null) {
       const c = capOrdinalStringByTopStripQNav(fromTitle);
+      if (c != null) return { ordinal: c };
+    }
+
+    const fromStem = extractVisibleMcqQuestionNumber((e) => !e || isInOurPanel(e));
+    if (fromStem != null) {
+      const c = capOrdinalStringByTopStripQNav(String(fromStem));
+      if (c != null) return { ordinal: c };
+    }
+
+    const zhProgOnly = extractZhNthOfMTotalProgressQuestion();
+    if (zhProgOnly != null) {
+      const c = capOrdinalStringByTopStripQNav(String(zhProgOnly));
       if (c != null) return { ordinal: c };
     }
 
@@ -1644,27 +3017,1493 @@
     return o != null ? o : "—";
   }
 
-  /** 可见题干与 JSON 题干是否像同一题 */
+  /** 题干与题库 exact */
   function visibleStemMatchesQuestion(visibleStem, qRaw) {
-    const vNorm = normalizeForMatch(visibleStem);
-    const vRel = relaxForMatch(visibleStem);
-    if (vNorm.length < 12) return false;
-    const nq = normalizeForMatch(qRaw || "");
-    const nqRel = relaxForMatch(qRaw || "");
-    if (nq.length < 8) return false;
-    if (vNorm.includes(nq)) return true;
-    if (nq.length >= 14 && vNorm.includes(nq.slice(0, Math.min(80, nq.length))))
-      return true;
-    const vp = vNorm.slice(0, Math.min(48, vNorm.length));
-    if (vp.length >= 12 && nq.includes(vp)) return true;
-    if (nqRel.length >= 12 && vRel.includes(nqRel.slice(0, Math.min(64, nqRel.length))))
-      return true;
-    const vr = vRel.slice(0, Math.min(48, vRel.length));
-    if (vr.length >= 12 && nqRel.includes(vr)) return true;
+    if (!stemIpv4CidrTokensAlign(visibleStem, qRaw)) return false;
+    const a = stemUnifiedExactKeyFromVisibleStem(visibleStem);
+    const b = stemUnifiedExactKeyFromQuestionHtml(qRaw);
+    return !!a && !!b && a === b;
+  }
+
+  /** 题干对题库行 */
+  function visibleStemMatchesMcqRow(visibleStem, row) {
+    const e = row && row.entry;
+    if (!e) return false;
+    if (!stemUnifiedExactKeyFromVisibleStem(visibleStem)) return false;
+    return visibleStemMatchesQuestion(visibleStem, e.问题 || "");
+  }
+
+  const RE_IPV4_CIDR_TOKEN =
+    /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?:\/\d{1,2})?)\b/gi;
+
+  function extractIpv4CidrTokensUnique(s) {
+    const raw = String(s || "");
+    const out = [];
+    const seen = Object.create(null);
+    let m;
+    RE_IPV4_CIDR_TOKEN.lastIndex = 0;
+    while ((m = RE_IPV4_CIDR_TOKEN.exec(raw)) !== null) {
+      const t = m[1].toLowerCase();
+      if (!seen[t]) {
+        seen[t] = 1;
+        out.push(t);
+      }
+    }
+    return out;
+  }
+
+  /** IPv4/CIDR 题干一致 */
+  function stemIpv4CidrTokensAlign(visibleStem, qRaw) {
+    const vPlain = unifiedPlainFromVisibleStem(visibleStem);
+    const qPlain = unifiedPlainFromQuestionHtml(qRaw || "");
+    const vToks = extractIpv4CidrTokensUnique(vPlain);
+    const qToks = extractIpv4CidrTokensUnique(qPlain);
+    if (qToks.length === 0 && vToks.length === 0) return true;
+    const vNorm = canonicalStemStrict(vPlain);
+    const qNorm = normalizeQuestionHtmlForMatch(qRaw || "");
+    let i;
+    for (i = 0; i < qToks.length; i++) {
+      if (!vNorm.includes(qToks[i])) return false;
+    }
+    if (vToks.length >= 2 && qToks.length >= 2) {
+      for (i = 0; i < vToks.length; i++) {
+        if (!qNorm.includes(vToks[i])) return false;
+      }
+    }
+    return true;
+  }
+
+  /** MCQ 选项/配对文案归一化 */
+  function normalizeMcqOptionPlainForExactCompare(s) {
+    return String(s || "")
+      .normalize("NFKC")
+      .replace(/[\u200b\uFEFF]/g, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
+  /** 去掉列表序号前缀 */
+  function stripLeadingMcqListOrdinalFromDomPlain(s) {
+    let t = String(s || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\./.test(t)) return t;
+    for (let pass = 0; pass < 4; pass++) {
+      const u = t;
+      t = t.replace(/^\s*[\[(（]?\s*[A-Za-z]\s*[\])）、.．:：]\s+/, "").trim();
+      t = t.replace(/^\s*\d{1,2}\s*[.)）、.．:：]\s+/, "").trim();
+      if (t === u) break;
+    }
+    return t;
+  }
+
+  /** OM 去掉行首单字母 */
+  function stripObjectMatchingLeadingLetterBadge(s) {
+    let t = stripLeadingMcqListOrdinalFromDomPlain(s);
+    for (let pass = 0; pass < 3; pass++) {
+      const u = t;
+      t = t.replace(/^\s*[A-Za-z]\s+/, "").trim();
+      if (t === u) break;
+    }
+    return t;
+  }
+
+  /** 两段 exact 相同则 1 */
+  function mcqOptionPairExactMatchScore(textA, textB) {
+    const a = normalizeMcqOptionPlainForExactCompare(
+      stripLeadingMcqListOrdinalFromDomPlain(String(textA || ""))
+    );
+    const b = normalizeMcqOptionPlainForExactCompare(
+      stripLeadingMcqListOrdinalFromDomPlain(String(textB || ""))
+    );
+    if (!a || !b) return 0;
+    return a === b ? 1 : 0;
+  }
+
+  /** DOM 选项 vs 题库选项 */
+  function optionTextMatchScoreMcq(domPlain, jsonPlain) {
+    return mcqOptionPairExactMatchScore(domPlain, jsonPlain);
+  }
+
+  /** MCQ 选项正文无 a11y 序号 */
+  function mcqItemTextInnerPlainExcludingA11y(innerEl) {
+    if (!innerEl) return "";
+    const parts = [];
+    function walk(node) {
+      if (!node) return;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const x = String(node.nodeValue || "").replace(/\u00a0/g, " ");
+        if (x.trim()) parts.push(x);
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const cn = String(node.className || "");
+      if (/screenReader-position/i.test(cn)) return;
+      for (let c = node.firstChild; c; c = c.nextSibling) walk(c);
+    }
+    walk(innerEl);
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  function hasVisibleMcqItemTextInnerInViewport() {
+    const sels = [
+      ".mcq__item-text-inner",
+      "[class*='mcq__item-text-inner' i]",
+    ].join(", ");
+    const nodes = querySelectorAllDeep(document, sels, 72);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    for (const n of nodes) {
+      if (!n || isInOurPanel(n) || isInCourseChromeSidebar(n)) continue;
+      const r = n.getBoundingClientRect();
+      const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      if (visW * visH >= 80) return true;
+    }
     return false;
   }
 
-  /** findBestMcq 平分时用所属单元/大纲加权重 */
+  function inferMcqOptionLabelFromRowEl(innerEl) {
+    const row =
+      (innerEl.closest &&
+        innerEl.closest(".mcq__item, [class*='mcq__item' i]")) ||
+      innerEl.parentElement;
+    if (!row) return null;
+    const pick = (s) => {
+      const t = String(s || "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, "")
+        .trim();
+      if (/^[A-Z]$/i.test(t)) return t.toUpperCase();
+      if (/^\d{1,2}$/.test(t)) return t;
+      return null;
+    };
+    const small =
+      row.querySelectorAll(
+        "[class*='label' i], [class*='index' i], [class*='prefix' i], .mcq__item-label, .mcq__item-index"
+      );
+    for (const c of small) {
+      const x = pick(c.textContent);
+      if (x) return x;
+    }
+    let sib = innerEl.previousElementSibling;
+    for (let k = 0; k < 3 && sib; k++) {
+      const x = pick(sib.textContent);
+      if (x) return x;
+      sib = sib.previousElementSibling;
+    }
+    return null;
+  }
+
+  function collectVisibleMcqOptionRows() {
+    const sels = [
+      ".mcq__item-text-inner",
+      "[class*='mcq__item-text-inner' i]",
+    ].join(", ");
+    const nodes = querySelectorAllDeep(document, sels, 80);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const seen = new WeakSet();
+    const out = [];
+    for (const n of nodes) {
+      if (!n || seen.has(n) || isInOurPanel(n) || isInCourseChromeSidebar(n))
+        continue;
+      const r = n.getBoundingClientRect();
+      const visW = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      const visH = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      if (visW * visH < 80) continue;
+      let t = mcqItemTextInnerPlainExcludingA11y(n);
+      if (!t.length) {
+        t = (n.innerText || n.textContent || "")
+          .replace(/\u00a0/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+      seen.add(n);
+      out.push({
+        label: inferMcqOptionLabelFromRowEl(n),
+        text: t,
+        el: n,
+      });
+    }
+    out.sort((a, b) => {
+      const ra = a.el.getBoundingClientRect();
+      const rb = b.el.getBoundingClientRect();
+      const dy = ra.top - rb.top;
+      if (Math.abs(dy) > 10) return dy;
+      return ra.left - rb.left;
+    });
+    for (let i = 0; i < out.length; i++) {
+      if (out[i].label == null && i < 26) {
+        out[i].label = String.fromCharCode(65 + i);
+      }
+    }
+    return out;
+  }
+
+  function mapDomOptionRowsToJsonIndices(domRows, jsonPlain) {
+    const nD = domRows.length;
+    const nJ = jsonPlain.length;
+    const out = new Array(nD).fill(-1);
+    if (!nD || !nJ) return out;
+    const pairs = [];
+    for (let i = 0; i < nD; i++) {
+      for (let j = 0; j < nJ; j++) {
+        const sc = optionTextMatchScoreMcq(domRows[i].text, jsonPlain[j]);
+        if (sc >= MCQ_DOM_JSON_MAP_PAIR_MIN) pairs.push({ i, j, sc });
+      }
+    }
+    pairs.sort((a, b) => b.sc - a.sc);
+    const usedI = new Set();
+    const usedJ = new Set();
+    for (const p of pairs) {
+      if (usedI.has(p.i) || usedJ.has(p.j)) continue;
+      out[p.i] = p.j;
+      usedI.add(p.i);
+      usedJ.add(p.j);
+    }
+    return out;
+  }
+
+  function mcqBinomial(n, k) {
+    if (k < 0 || k > n) return 0;
+    if (k === 0 || k === n) return 1;
+    let c = 1;
+    const useK = k < n - k ? k : n - k;
+    for (let i = 0; i < useK; i++) c = (c * (n - i)) / (i + 1);
+    return Math.round(c);
+  }
+
+  function mcqFactorial(k) {
+    let f = 1;
+    for (let i = 2; i <= k; i++) f *= i;
+    return f;
+  }
+
+  function mcqCombinationsChooseK(n, k) {
+    const out = [];
+    const path = [];
+    function dfs(start) {
+      if (path.length === k) {
+        out.push(path.slice());
+        return;
+      }
+      for (let i = start; i < n; i++) {
+        path.push(i);
+        dfs(i + 1);
+        path.pop();
+      }
+    }
+    dfs(0);
+    return out;
+  }
+
+  function mcqPermuteArray(arr) {
+    const n = arr.length;
+    if (n <= 1) return [arr.slice()];
+    const res = [];
+    for (let i = 0; i < n; i++) {
+      const h = arr[i];
+      const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+      const subs = mcqPermuteArray(rest);
+      for (let si = 0; si < subs.length; si++) {
+        res.push([h].concat(subs[si]));
+      }
+    }
+    return res;
+  }
+
+  /** 正确项 JSON 到 DOM 行 */
+  function assignMcqCorrectJsonToDomRows(domRows, jsonPlain, correctIdx) {
+    const jToI = Object.create(null);
+    if (!domRows.length || !correctIdx.length) return jToI;
+    const n = domRows.length;
+    const k = correctIdx.length;
+
+    function pairScore(jIdx, domI) {
+      return optionTextMatchScoreMcq(
+        domRows[domI].text,
+        String(jsonPlain[jIdx] || "")
+      );
+    }
+
+    if (k === 1) {
+      const j0 = correctIdx[0];
+      let bestI = -1;
+      let bestS = 0;
+      for (let i = 0; i < n; i++) {
+        const s = pairScore(j0, i);
+        if (s > bestS) {
+          bestS = s;
+          bestI = i;
+        }
+      }
+      if (bestI >= 0 && bestS >= MCQ_DOM_OPTION_MATCH_MIN) jToI[j0] = bestI;
+      return jToI;
+    }
+
+    const bruteWork = mcqBinomial(n, k) * mcqFactorial(k);
+    if (k <= n && k <= 5 && bruteWork <= 24000) {
+      const combs = mcqCombinationsChooseK(n, k);
+      let bestTotal = -1;
+      let bestPerm = null;
+      for (let ci = 0; ci < combs.length; ci++) {
+        const pick = combs[ci];
+        const perms = mcqPermuteArray(pick);
+        for (let pi = 0; pi < perms.length; pi++) {
+          const perm = perms[pi];
+          let total = 0;
+          let ok = true;
+          for (let t = 0; t < k; t++) {
+            const s = pairScore(correctIdx[t], perm[t]);
+            if (s < MCQ_DOM_OPTION_MATCH_MIN) {
+              ok = false;
+              break;
+            }
+            total += s;
+          }
+          if (!ok) continue;
+          if (total > bestTotal) {
+            bestTotal = total;
+            bestPerm = perm;
+          }
+        }
+      }
+      if (bestPerm && bestTotal >= 0) {
+        for (let t = 0; t < k; t++) {
+          jToI[correctIdx[t]] = bestPerm[t];
+        }
+      }
+      return jToI;
+    }
+
+    const usedI = new Set();
+    const sortedJ = [...correctIdx].sort(
+      (a, b) =>
+        String(jsonPlain[b] || "").length - String(jsonPlain[a] || "").length
+    );
+    for (let sj = 0; sj < sortedJ.length; sj++) {
+      const j = sortedJ[sj];
+      const want = String(jsonPlain[j] || "");
+      if (!want) continue;
+      let bestI = -1;
+      let bestS = 0;
+      for (let i = 0; i < domRows.length; i++) {
+        if (usedI.has(i)) continue;
+        const s = pairScore(j, i);
+        if (s > bestS) {
+          bestS = s;
+          bestI = i;
+        }
+      }
+      if (bestI >= 0 && bestS >= MCQ_DOM_OPTION_MATCH_MIN) {
+        usedI.add(bestI);
+        jToI[j] = bestI;
+      }
+    }
+    return jToI;
+  }
+
+  /** 答案与选项 exact 配对 */
+  function assignAnswerLinesToJsonOptionIndices(jsonPlain, answerLines) {
+    const n = jsonPlain.length;
+    const k = answerLines.length;
+    if (!k || !n) return [];
+    function pairScore(t, j) {
+      return mcqOptionPairExactMatchScore(
+        String(answerLines[t] || ""),
+        String(jsonPlain[j] || "")
+      );
+    }
+    if (k === 1) {
+      let bestJ = -1;
+      let bestS = 0;
+      for (let j = 0; j < n; j++) {
+        const s = pairScore(0, j);
+        if (s > bestS) {
+          bestS = s;
+          bestJ = j;
+        }
+      }
+      return bestJ >= 0 && bestS >= MCQ_DOM_JSON_MAP_PAIR_MIN ? [bestJ] : [];
+    }
+    const bruteWork = mcqBinomial(n, k) * mcqFactorial(k);
+    if (k <= n && k <= 5 && bruteWork <= 24000) {
+      const combs = mcqCombinationsChooseK(n, k);
+      let bestTotal = -1;
+      let bestPerm = null;
+      for (let ci = 0; ci < combs.length; ci++) {
+        const pick = combs[ci];
+        const perms = mcqPermuteArray(pick);
+        for (let pi = 0; pi < perms.length; pi++) {
+          const perm = perms[pi];
+          let total = 0;
+          let ok = true;
+          for (let t = 0; t < k; t++) {
+            const s = pairScore(t, perm[t]);
+            if (s < MCQ_DOM_JSON_MAP_PAIR_MIN) {
+              ok = false;
+              break;
+            }
+            total += s;
+          }
+          if (!ok) continue;
+          if (total > bestTotal) {
+            bestTotal = total;
+            bestPerm = perm;
+          }
+        }
+      }
+      if (bestPerm && bestTotal >= 0) {
+        return [...new Set(bestPerm)].sort((a, b) => a - b);
+      }
+      return [];
+    }
+    const usedJ = new Set();
+    const sortedT = Array.from({ length: k }, (_, i) => i).sort(
+      (a, b) =>
+        String(answerLines[b] || "").length -
+        String(answerLines[a] || "").length
+    );
+    const picked = [];
+    for (let si = 0; si < sortedT.length; si++) {
+      const t = sortedT[si];
+      let bestJ = -1;
+      let bestS = 0;
+      for (let j = 0; j < n; j++) {
+        if (usedJ.has(j)) continue;
+        const s = pairScore(t, j);
+        if (s > bestS) {
+          bestS = s;
+          bestJ = j;
+        }
+      }
+      if (bestJ >= 0 && bestS >= MCQ_DOM_JSON_MAP_PAIR_MIN) {
+        usedJ.add(bestJ);
+        picked.push(bestJ);
+      }
+    }
+    return picked.sort((a, b) => a - b);
+  }
+
+  /** MCQ 正确项下标 */
+  function resolveMcqCorrectOptionIndices(entry) {
+    const rawOpts = Array.isArray(entry.选项) ? entry.选项 : [];
+    const jsonPlain = rawOpts.map((l) =>
+      String(l).replace(/\s*（正确答案）\s*$/, "").trim()
+    );
+    const markers = [];
+    rawOpts.forEach((l, i) => {
+      if (String(l).indexOf("（正确答案）") >= 0) markers.push(i);
+    });
+    const markersU = [...new Set(markers)].sort((a, b) => a - b);
+
+    const ansRaw =
+      entry.正确答案标号行 != null && String(entry.正确答案标号行).trim()
+        ? String(entry.正确答案标号行).trim()
+        : String(entry.正确答案 != null ? entry.正确答案 : "").trim();
+    const answerLines = ansRaw
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (markersU.length >= 2) {
+      return markersU;
+    }
+    if (answerLines.length >= 2) {
+      const fromLines = assignAnswerLinesToJsonOptionIndices(
+        jsonPlain,
+        answerLines
+      );
+      if (fromLines.length >= 2) return fromLines;
+      if (fromLines.length > markersU.length) return fromLines;
+    }
+    if (markersU.length === 1) {
+      return markersU;
+    }
+    if (answerLines.length === 1) {
+      const one = assignAnswerLinesToJsonOptionIndices(jsonPlain, answerLines);
+      if (one.length === 1) return one;
+    }
+    return markersU;
+  }
+
+  /** 高亮用的 MCQ 选项外层节点 */
+  function resolveMcqItemHostForHighlight(innerEl) {
+    if (!innerEl) return null;
+    const lab =
+      innerEl.closest &&
+      innerEl.closest(
+        "label.mcq__item-label, label.js-item-label, label[role='listitem']"
+      );
+    if (lab && !isInOurPanel(lab)) return lab;
+    const cnOf = (el) => String((el && el.className) || "");
+    const isMcqItemSubPart = (cn) =>
+      /\bmcq__item-text-inner\b/i.test(cn) ||
+      /\bmcq__item-text\b/i.test(cn) ||
+      /\bmcq__item-label\b/i.test(cn) ||
+      /\bmcq__item-input\b/i.test(cn) ||
+      /\bmcq__item-icon\b/i.test(cn) ||
+      /\bmcq__item-state\b/i.test(cn) ||
+      /\bmcq__item-answer-icon\b/i.test(cn);
+    const isMcqOptionRowHost = (el) => {
+      if (!el || isInOurPanel(el)) return false;
+      const cn = cnOf(el);
+      if (isMcqItemSubPart(cn)) return false;
+      const tag = String(el.tagName || "").toLowerCase();
+      const role = String((el.getAttribute && el.getAttribute("role")) || "");
+      if (tag === "input" && role === "radio") return false;
+      if (/\bmcq__item\b/i.test(cn) || /js-mcq-item/i.test(cn)) return true;
+      if (/mcq__choice|mcq-choice/i.test(cn)) return true;
+      if (/mcq__row|mcq-row/i.test(cn)) return true;
+      if (tag === "button" && /mcq/i.test(cn)) return true;
+      if (role === "radio" && tag !== "input") return true;
+      return false;
+    };
+    let p = innerEl.parentElement;
+    for (let d = 0; d < 26 && p; d++) {
+      if (isInOurPanel(p)) break;
+      if (isMcqOptionRowHost(p)) return p;
+      p = p.parentElement;
+    }
+    return innerEl.parentElement;
+  }
+
+  /** MCQ 选项对齐上下文 */
+  function resolveMcqDomHighlightContext(entry) {
+    if (!entry) return null;
+    const rawOpts = Array.isArray(entry.选项) ? entry.选项 : [];
+    if (rawOpts.length < 2) return null;
+    const jsonPlain = rawOpts.map((l) =>
+      String(l).replace(/\s*（正确答案）\s*$/, "").trim()
+    );
+    const correctIdx = resolveMcqCorrectOptionIndices(entry);
+    if (correctIdx.length === 0) return null;
+    if (!hasVisibleMcqItemTextInnerInViewport()) return null;
+    const correctField =
+      entry.正确答案 != null ? String(entry.正确答案).trim() : "";
+    const correctLbl =
+      entry.正确答案标号行 != null
+        ? String(entry.正确答案标号行).trim()
+        : "";
+    const correct =
+      correctIdx.map((j) => jsonPlain[j]).filter(Boolean).join("\n") ||
+      correctLbl ||
+      correctField;
+    const domRows = collectVisibleMcqOptionRows();
+    if (domRows.length < 1) return null;
+    const mapDj = mapDomOptionRowsToJsonIndices(domRows, jsonPlain);
+    const jToDomI = assignMcqCorrectJsonToDomRows(
+      domRows,
+      jsonPlain,
+      correctIdx
+    );
+    return { correct, domRows, mapDj, correctIdx, jToDomI };
+  }
+
+  /** 面板答案区展示用 HTML/文本 */
+  function buildPanelAnswerDisplay(entry) {
+    const correct =
+      entry && entry.正确答案 != null ? String(entry.正确答案).trim() : "";
+
+    if (
+      entry.objectMatchingCategoryKeys &&
+      entry.objectMatchingCategoryKeys.length >= 2
+    ) {
+      return correct || null;
+    }
+
+    const rawOpts = Array.isArray(entry.选项) ? entry.选项 : [];
+    if (rawOpts.length < 2) {
+      return correct || null;
+    }
+
+    const correctIdx = resolveMcqCorrectOptionIndices(entry);
+    if (correctIdx.length === 0) {
+      return correct || null;
+    }
+
+    const parts = [];
+    for (const j of correctIdx) {
+      const plain = String(rawOpts[j])
+        .replace(/\s*（正确答案）\s*$/, "")
+        .trim();
+      if (plain) parts.push(plain);
+    }
+    if (parts.length === 0) return correct || null;
+    return parts.join("\n");
+  }
+
+  function clearAllMcqCorrectHighlights() {
+    const nodes = querySelectorAllDeep(
+      document,
+      "." +
+        MCQ_CORRECT_HINT_CLASS +
+        ", ." +
+        MCQ_CORRECT_HINT_INNER_CLASS,
+      260
+    );
+    for (const el of nodes) {
+      el.classList.remove(MCQ_CORRECT_HINT_CLASS);
+      el.classList.remove(MCQ_CORRECT_HINT_INNER_CLASS);
+    }
+  }
+
+  /** 已勾选则不叠加正确项高亮 */
+  function isMcqOptionRowSiteSelected(innerEl) {
+    if (!innerEl) return false;
+    try {
+      const label =
+        innerEl.closest &&
+        innerEl.closest(
+          "label.mcq__item-label, label.js-item-label, label[role='listitem']"
+        );
+      if (
+        label &&
+        label.classList &&
+        (label.classList.contains("is-selected") ||
+          label.classList.contains("selected"))
+      )
+        return true;
+      const row =
+        innerEl.closest &&
+        innerEl.closest(".mcq__item.js-mcq-item, .mcq__item");
+      if (
+        row &&
+        row.classList &&
+        (row.classList.contains("is-selected") ||
+          row.classList.contains("selected"))
+      )
+        return true;
+      const input =
+        label &&
+        label.querySelector &&
+        label.querySelector('input[type="checkbox"], input[type="radio"]');
+      if (input && input.checked) return true;
+    } catch (_e) {
+      /* */
+    }
+    return false;
+  }
+
+  function parseObjectMatchingPairsFromEntry(entry) {
+    if (
+      !entry ||
+      !entry.objectMatchingCategoryKeys ||
+      entry.objectMatchingCategoryKeys.length < 2
+    )
+      return null;
+    const opts = Array.isArray(entry.选项) ? entry.选项 : [];
+    const pairs = [];
+    for (const line of opts) {
+      const raw = String(line).replace(/\s+/g, " ").trim();
+      if (!raw) continue;
+      let sep = raw.indexOf("：");
+      if (sep < 0) sep = raw.indexOf(":");
+      if (sep < 1) continue;
+      const cat = raw.slice(0, sep).trim();
+      const ans = raw.slice(sep + 1).trim();
+      if (cat && ans) pairs.push({ category: cat, answer: ans });
+    }
+    return pairs.length ? pairs : null;
+  }
+
+  function isObjectMatchingPlaceholderDropdownText(t) {
+    const s = String(t || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!s) return true;
+    return /请选择一个选项|请选择|select an option|choose an option|select\s+a\s+choice/i.test(
+      s
+    );
+  }
+
+  /** matching 下拉已选项 */
+  function isMatchingDropdownListItemSiteSelected(innerEl, wrapper) {
+    if (!innerEl || !wrapper) return false;
+    try {
+      const dropEl =
+        wrapper.querySelector(".dropdown__inner.js-dropdown-inner") ||
+        wrapper.querySelector(".dropdown__inner");
+      const dropRaw = String(
+        (dropEl && (dropEl.innerText || dropEl.textContent)) || ""
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (isObjectMatchingPlaceholderDropdownText(dropRaw)) return false;
+
+      if (innerEl.getAttribute && innerEl.getAttribute("aria-selected") === "true")
+        return true;
+      const li =
+        innerEl.closest &&
+        innerEl.closest(
+          "li[role='option'], li.dropdown__item, li.js-dropdown-list-item"
+        );
+      if (li && li.getAttribute && li.getAttribute("aria-selected") === "true")
+        return true;
+    } catch (_e) {
+      /* */
+    }
+    return false;
+  }
+
+  function parseCssColorToRgbTuple(css) {
+    if (!css) return null;
+    const s = String(css).trim();
+    let m = s.match(
+      /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/i
+    );
+    if (m) {
+      const a = m[4] != null ? parseFloat(m[4]) : 1;
+      if (a < 0.08) return null;
+      return [+m[1], +m[2], +m[3]];
+    }
+    m = s.match(/^#([\da-f]{3}|[\da-f]{6})$/i);
+    if (m) {
+      let h = m[1];
+      if (h.length === 3)
+        h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+      return [
+        parseInt(h.slice(0, 2), 16),
+        parseInt(h.slice(2, 4), 16),
+        parseInt(h.slice(4, 6), 16),
+      ];
+    }
+    return null;
+  }
+
+  function readOmBadgeRgbTuple(wrapper) {
+    const badge = wrapper.querySelector(
+      ".category-item-number, [class*='category-item-number' i]"
+    );
+    if (!badge) return null;
+    try {
+      const cs = getComputedStyle(badge).backgroundColor;
+      const t = parseCssColorToRgbTuple(cs);
+      if (t) return t;
+    } catch (_e) {
+      /* */
+    }
+    try {
+      const st = badge.getAttribute && badge.getAttribute("style");
+      if (st) {
+        const bm = st.match(/background(?:-color)?\s*:\s*([^;]+)/i);
+        if (bm) return parseCssColorToRgbTuple(bm[1].trim());
+      }
+    } catch (_e2) {
+      /* */
+    }
+    return null;
+  }
+
+  function applyObjectMatchingPairTint(wrapper, rgbTuple) {
+    if (!wrapper || !rgbTuple || rgbTuple.length !== 3) return;
+    const [r, g, b] = rgbTuple;
+    const fill = "rgba(" + r + "," + g + "," + b + ",0.26)";
+    const edge = "rgba(" + r + "," + g + "," + b + ",0.88)";
+    try {
+      wrapper.setAttribute(OM_PAIR_TINT_ATTR, "1");
+      wrapper.style.setProperty("box-sizing", "border-box", "important");
+      wrapper.style.setProperty("border-radius", "10px", "important");
+      wrapper.style.setProperty("background-color", fill, "important");
+      wrapper.style.setProperty(
+        "box-shadow",
+        "inset 0 0 0 2px " + edge,
+        "important"
+      );
+    } catch (_e) {
+      /* */
+    }
+  }
+
+  function clearObjectMatchingPairTints() {
+    const sel = "[" + OM_PAIR_TINT_ATTR + '="1"]';
+    const nodes = querySelectorAllDeep(document, sel, 220);
+    const props = [
+      "background-color",
+      "box-shadow",
+      "box-sizing",
+      "border-radius",
+    ];
+    for (const el of nodes) {
+      el.removeAttribute(OM_PAIR_TINT_ATTR);
+      for (const p of props) {
+        try {
+          el.style.removeProperty(p);
+        } catch (_e) {
+          /* */
+        }
+      }
+    }
+  }
+
+  function objectMatchingRowTitlePlain(wrapper) {
+    const titleEl =
+      wrapper.querySelector(
+        ".matching__item-title .matching__item-title_inner"
+      ) || wrapper.querySelector(".matching__item-title_inner");
+    let t = String(
+      (titleEl && (titleEl.innerText || titleEl.textContent)) || ""
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    if (t) return stripObjectMatchingLeadingLetterBadge(t);
+    try {
+      const c = wrapper.cloneNode(true);
+      c
+        .querySelectorAll(
+          ".category-item-number, [class*='category-item-number' i]"
+        )
+        .forEach((n) => n.remove());
+      t = String(c.innerText || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return stripObjectMatchingLeadingLetterBadge(t);
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  /** matching 类下拉宿主 */
+  function collectMatchingLikeDropdownRows() {
+    const hosts = querySelectorAllDeep(
+      document,
+      "object-matching-dropdown-view, matching-dropdown-view",
+      96
+    );
+    const seen = new WeakSet();
+    const rows = [];
+    for (let hi = 0; hi < hosts.length; hi++) {
+      const h = hosts[hi];
+      if (!h || seen.has(h) || isInOurPanel(h) || isInCourseChromeSidebar(h))
+        continue;
+      const sr = h.shadowRoot;
+      if (!sr) continue;
+      const w = sr.querySelector(".matching__item-container-options-wrapper");
+      if (!w) continue;
+      seen.add(h);
+      rows.push({
+        wrapper: w,
+        host: h,
+        tag: (h.tagName && h.tagName.toLowerCase()) || "",
+      });
+    }
+    rows.sort((a, b) => {
+      const ia = parseInt(String(a.host.getAttribute("index") || ""), 10);
+      const ib = parseInt(String(b.host.getAttribute("index") || ""), 10);
+      if (Number.isFinite(ia) && Number.isFinite(ib) && ia !== ib)
+        return ia - ib;
+      const ra = a.host.getBoundingClientRect().top;
+      const rb = b.host.getBoundingClientRect().top;
+      return ra - rb;
+    });
+    return rows;
+  }
+
+  function matchingDropdownItemPlainForHint(el) {
+    if (!el) return "";
+    try {
+      const v = el.getAttribute && el.getAttribute("value");
+      if (v != null) {
+        const vt = String(v).replace(/\s+/g, " ").trim();
+        if (vt) return vt;
+      }
+    } catch (_e) {
+      /* */
+    }
+    return String(el.innerText || el.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function applyMatchingDropdownCorrectHints(wrapper, pair) {
+    if (!wrapper || !pair || !pair.answer) return;
+    try {
+      const items = wrapper.querySelectorAll(
+        ".dropdown__item-inner.js-dropdown-list-item-inner, .dropdown__item-inner[role='button'], .dropdown__item-inner"
+      );
+      const scored = [];
+      for (let ii = 0; ii < items.length; ii++) {
+        const el = items[ii];
+        el.classList.remove(MATCHING_DD_CORRECT_CLASS);
+        const li =
+          el.closest &&
+          el.closest(
+            "li[role='option'], li.dropdown__item, li.js-dropdown-list-item"
+          );
+        if (li) li.classList.remove(MATCHING_DD_CORRECT_CLASS);
+        const t = matchingDropdownItemPlainForHint(el);
+        const sc = t
+          ? optionTextMatchScoreMcq(t, pair.answer)
+          : 0;
+        scored.push({ el: el, li: li, sc: sc });
+      }
+      let bi = -1;
+      let best = -1;
+      let second = -1;
+      for (let si = 0; si < scored.length; si++) {
+        const s = scored[si].sc;
+        if (s > best) {
+          second = best;
+          best = s;
+          bi = si;
+        } else if (s > second) second = s;
+      }
+      const margin = 0.06;
+      if (
+        bi >= 0 &&
+        best >= MCQ_DOM_OPTION_MATCH_MIN &&
+        best - second >= margin
+      ) {
+        const win = scored[bi];
+        if (!isMatchingDropdownListItemSiteSelected(win.el, wrapper)) {
+          if (win.li) win.li.classList.add(MATCHING_DD_CORRECT_CLASS);
+          else win.el.classList.add(MATCHING_DD_CORRECT_CLASS);
+        }
+      }
+    } catch (_e) {
+      /* */
+    }
+  }
+
+  function disconnectMatchingDropdownHintObservers() {
+    if (matchingDdRehintTimer != null) {
+      try {
+        clearTimeout(matchingDdRehintTimer);
+      } catch (_e) {
+        /* */
+      }
+      matchingDdRehintTimer = null;
+    }
+    for (const [, obs] of matchingDropdownHintObserverByHost) {
+      try {
+        obs.disconnect();
+      } catch (_e2) {
+        /* */
+      }
+    }
+    matchingDropdownHintObserverByHost.clear();
+  }
+
+  function reapplyMatchingDropdownHintsOnly() {
+    const entry = lastEntryForMatchingDdRehint;
+    if (!entry) return;
+    const pairs = parseObjectMatchingPairsFromEntry(entry);
+    if (!pairs || !pairs.length) return;
+    const left = collectMatchingLikeDropdownRows();
+    if (!left.length) return;
+    for (let ri = 0; ri < left.length; ri++) {
+      if (left[ri].host)
+        ensureNetacadHighlightStylesInShadow(left[ri].host);
+    }
+    applyMatchingDropdownHintsForLeftRows(left, pairs);
+    for (let si = 0; si < left.length; si++) {
+      syncMatchingDropdownRowOutline(left[si].wrapper, left[si].host);
+    }
+  }
+
+  function scheduleMatchingDdRehint() {
+    if (matchingDdRehintTimer != null) {
+      try {
+        clearTimeout(matchingDdRehintTimer);
+      } catch (_e) {
+        /* */
+      }
+      matchingDdRehintTimer = null;
+    }
+    matchingDdRehintTimer = window.setTimeout(() => {
+      matchingDdRehintTimer = null;
+      reapplyMatchingDropdownHintsOnly();
+    }, 70);
+  }
+
+  function installMatchingDropdownHintObservers(leftRows) {
+    if (!leftRows || !leftRows.length) return;
+    for (let ri = 0; ri < leftRows.length; ri++) {
+      const host = leftRows[ri].host;
+      if (!host || !host.shadowRoot || matchingDropdownHintObserverByHost.has(host))
+        continue;
+      try {
+        const obs = new MutationObserver(() => {
+          scheduleMatchingDdRehint();
+        });
+        obs.observe(host.shadowRoot, {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          attributeFilter: ["class", "aria-expanded", "aria-hidden", "hidden"],
+        });
+        matchingDropdownHintObserverByHost.set(host, obs);
+      } catch (_e) {
+        /* */
+      }
+    }
+  }
+
+  function resolvePairForMatchingWrapper(wrapper, pairs, rowIndex) {
+    const titleEl =
+      wrapper.querySelector(
+        ".matching__item-title .matching__item-title_inner"
+      ) || wrapper.querySelector(".matching__item-title_inner");
+    const catRaw = String(
+      (titleEl && (titleEl.innerText || titleEl.textContent)) || ""
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    let pair = null;
+    let bestS = 0;
+    for (let pi = 0; pi < pairs.length; pi++) {
+      const p = pairs[pi];
+      const s = mcqOptionPairExactMatchScore(catRaw, p.category);
+      if (s > bestS) {
+        bestS = s;
+        pair = p;
+      }
+    }
+    if (!pair || bestS < OM_CATEGORY_MATCH_MIN) {
+      if (pairs[rowIndex]) pair = pairs[rowIndex];
+      else return null;
+    }
+    return pair;
+  }
+
+  function getMatchingRowDropdownPlain(wrapper) {
+    if (!wrapper) return "";
+    const dropEl =
+      wrapper.querySelector(".dropdown__inner.js-dropdown-inner") ||
+      wrapper.querySelector(".dropdown__inner");
+    return String(
+      (dropEl && (dropEl.innerText || dropEl.textContent)) || ""
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /** OM 行高亮 class */
+  function syncMatchingDropdownRowOutline(wrapper, host) {
+    if (!wrapper) return;
+    const dropRaw = getMatchingRowDropdownPlain(wrapper);
+    const tag =
+      host && String(host.tagName || "").toLowerCase();
+    wrapper.classList.remove(OM_ROW_CORRECT_CLASS);
+    wrapper.classList.remove(OM_ROW_WRONG_CLASS);
+    const ph = isObjectMatchingPlaceholderDropdownText(dropRaw);
+    if (ph) {
+      if (tag !== "matching-dropdown-view")
+        wrapper.classList.add(OM_ROW_PLACEHOLDER_CLASS);
+      else wrapper.classList.remove(OM_ROW_PLACEHOLDER_CLASS);
+    } else {
+      wrapper.classList.remove(OM_ROW_PLACEHOLDER_CLASS);
+    }
+  }
+
+  function applyMatchingDropdownHintsForLeftRows(left, pairs) {
+    if (!pairs || !pairs.length || !left || !left.length) return;
+    for (let i = 0; i < left.length; i++) {
+      const pair = resolvePairForMatchingWrapper(left[i].wrapper, pairs, i);
+      if (pair) applyMatchingDropdownCorrectHints(left[i].wrapper, pair);
+    }
+  }
+
+  function getObjectMatchingWalkRoot() {
+    const hits = querySelectorAllDeep(
+      document,
+      [
+        "matching-view",
+        "object-matching-view",
+        '[class*="objectMatching__widget" i]',
+        '[class*="object-matching__widget" i]',
+        '[class*="component__widget"][class*="objectmatching" i]',
+        '[class*="component-matching" i]',
+        '[class*="matching__widget" i]',
+      ].join(", "),
+      16
+    );
+    for (const h of hits) {
+      if (
+        h &&
+        !isInOurPanel(h) &&
+        !isInCourseChromeSidebar(h) &&
+        domElLikelyRenderedForUser(h)
+      )
+        return h;
+    }
+    return document.body;
+  }
+
+  /** 收集 matching 宿主 */
+  function walkCollectObjectMatchingHosts(entryRoot, maxHosts) {
+    maxHosts = maxHosts == null ? 64 : maxHosts;
+    const hosts = [];
+    const seenHost = new WeakSet();
+    const stack = [entryRoot || document.body];
+    const seenNode = new WeakSet();
+    let steps = 0;
+    const budget = 14000;
+    while (stack.length && hosts.length < maxHosts && steps++ < budget) {
+      const node = stack.pop();
+      if (!node || seenNode.has(node)) continue;
+      seenNode.add(node);
+      if (node.nodeType === 1) {
+        const tag = node.tagName && node.tagName.toLowerCase();
+        const isMatchingLikeTag =
+          tag &&
+          (tag.indexOf("object-matching-") === 0 ||
+            (tag.indexOf("matching-") === 0 && !/^matching-lines/i.test(tag)));
+        if (
+          isMatchingLikeTag &&
+          node.shadowRoot &&
+          !seenHost.has(node) &&
+          !isInOurPanel(node) &&
+          !isInCourseChromeSidebar(node)
+        ) {
+          const w = node.shadowRoot.querySelector(
+            ".matching__item-container-options-wrapper"
+          );
+          if (w) {
+            seenHost.add(node);
+            hosts.push({ host: node, wrapper: w, tag: tag });
+          }
+        }
+        if (node.shadowRoot) stack.push(node.shadowRoot);
+        const ch = node.children;
+        if (ch)
+          for (let i = ch.length - 1; i >= 0; i--) stack.push(ch[i]);
+      } else if (node.nodeType === 11) {
+        const ch = node.children;
+        if (ch)
+          for (let i = ch.length - 1; i >= 0; i--) stack.push(ch[i]);
+      }
+    }
+    return hosts;
+  }
+
+  function classifyObjectMatchingLeftRightRows(allHosts) {
+    const strip = (h) => ({ host: h.host, wrapper: h.wrapper, tag: h.tag });
+    const withDrop = [];
+    const withoutDrop = [];
+    for (const h of allHosts) {
+      if (isInOurPanel(h.host) || isInCourseChromeSidebar(h.host)) continue;
+      const w = h.wrapper;
+      const hasDrop = !!(
+        w.querySelector(".dropdown__inner") ||
+        w.querySelector(".js-dropdown-inner") ||
+        w.querySelector("select")
+      );
+      (hasDrop ? withDrop : withoutDrop).push(strip(h));
+    }
+    if (withDrop.length && withoutDrop.length)
+      return { left: withDrop, right: withoutDrop };
+    if (allHosts.length >= 2) {
+      const scored = [];
+      for (const h of allHosts) {
+        if (isInOurPanel(h.host) || isInCourseChromeSidebar(h.host)) continue;
+        const r = h.host.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        scored.push(Object.assign({}, strip(h), { cx: cx }));
+      }
+      if (scored.length >= 2) {
+        scored.sort((a, b) => a.cx - b.cx);
+        const mid =
+          (scored[0].cx + scored[scored.length - 1].cx) / 2;
+        const left = [];
+        const right = [];
+        for (const s of scored) {
+          const { cx: _cx, ...rest } = s;
+          (s.cx <= mid ? left : right).push(rest);
+        }
+        if (left.length && right.length) return { left: left, right: right };
+      }
+    }
+    return {
+      left: withDrop.length ? withDrop : allHosts.map(strip),
+      right: [],
+    };
+  }
+
+  function clearObjectMatchingHighlights() {
+    disconnectMatchingDropdownHintObservers();
+    lastEntryForMatchingDdRehint = null;
+    clearObjectMatchingPairTints();
+    const sel =
+      "." +
+      OM_ROW_CORRECT_CLASS +
+      ", ." +
+      OM_ROW_WRONG_CLASS +
+      ", ." +
+      OM_ROW_PLACEHOLDER_CLASS;
+    const nodes = querySelectorAllDeep(document, sel, 140);
+    for (const el of nodes) {
+      el.classList.remove(OM_ROW_CORRECT_CLASS);
+      el.classList.remove(OM_ROW_WRONG_CLASS);
+      el.classList.remove(OM_ROW_PLACEHOLDER_CLASS);
+    }
+    const ddHint = querySelectorAllDeep(
+      document,
+      "." + MATCHING_DD_CORRECT_CLASS,
+      220
+    );
+    for (let di = 0; di < ddHint.length; di++) {
+      ddHint[di].classList.remove(MATCHING_DD_CORRECT_CLASS);
+    }
+  }
+
+  /** OM V2 行文案 */
+  function objectMatchingV2RowPlain(btn) {
+    if (!btn) return "";
+    const te = btn.querySelector(".category-item-text");
+    if (te) {
+      const raw = String(te.innerText || te.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return stripObjectMatchingLeadingLetterBadge(raw);
+    }
+    return objectMatchingRowTitlePlain(btn);
+  }
+
+  function collectObjectMatchingViewContexts() {
+    const hosts = querySelectorAllDeep(document, "object-matching-view", 40);
+    const out = [];
+    for (let i = 0; i < hosts.length; i++) {
+      const host = hosts[i];
+      if (!host || isInOurPanel(host) || isInCourseChromeSidebar(host))
+        continue;
+      const sr = host.shadowRoot;
+      if (!sr) continue;
+      const cats = sr.querySelectorAll(
+        ".categories-container .objectMatching-category-item"
+      );
+      const opts = sr.querySelectorAll(
+        ".options-container .objectMatching-option-item"
+      );
+      if (cats.length && opts.length) {
+        out.push({
+          host: host,
+          cats: Array.from(cats),
+          opts: Array.from(opts),
+        });
+      }
+    }
+    return out;
+  }
+
+  /** OM 页面高亮 */
+  function applyObjectMatchingHighlights(entry) {
+    clearObjectMatchingHighlights();
+    const pairs = parseObjectMatchingPairsFromEntry(entry);
+    if (!pairs || !pairs.length) return;
+
+    const v2ctxs = collectObjectMatchingViewContexts();
+    if (v2ctxs.length) {
+      for (let vi = 0; vi < v2ctxs.length; vi++) {
+        const ctx = v2ctxs[vi];
+        ensureNetacadHighlightStylesInShadow(ctx.host);
+        const usedCat = new Set();
+        const usedOpt = new Set();
+        for (let pi = 0; pi < pairs.length; pi++) {
+          const pair = pairs[pi];
+          const catHits = [];
+          for (let ci = 0; ci < ctx.cats.length; ci++) {
+            const btn = ctx.cats[ci];
+            if (usedCat.has(btn)) continue;
+            const catRaw = objectMatchingV2RowPlain(btn);
+            const s = mcqOptionPairExactMatchScore(catRaw, pair.category);
+            if (s >= OM_CATEGORY_MATCH_MIN) catHits.push({ btn, s });
+          }
+          if (!catHits.length) continue;
+          let catMax = 0;
+          for (let hi = 0; hi < catHits.length; hi++) {
+            if (catHits[hi].s > catMax) catMax = catHits[hi].s;
+          }
+          const catTies = catHits.filter((h) => h.s === catMax);
+          catTies.sort((a, b) => {
+            try {
+              const ra = a.btn.getBoundingClientRect();
+              const rb = b.btn.getBoundingClientRect();
+              if (Math.abs(ra.top - rb.top) > 2) return ra.top - rb.top;
+              return ra.left - rb.left;
+            } catch (_e) {
+              return 0;
+            }
+          });
+          const bestCat = catTies[0].btn;
+          usedCat.add(bestCat);
+
+          const optHits = [];
+          for (let oi = 0; oi < ctx.opts.length; oi++) {
+            const btn = ctx.opts[oi];
+            if (usedOpt.has(btn)) continue;
+            const optRaw = objectMatchingV2RowPlain(btn);
+            const s = optionTextMatchScoreMcq(optRaw, pair.answer);
+            if (s >= MCQ_DOM_OPTION_MATCH_MIN) optHits.push({ btn, s });
+          }
+          if (!optHits.length) continue;
+          let optMax = 0;
+          for (let oi = 0; oi < optHits.length; oi++) {
+            if (optHits[oi].s > optMax) optMax = optHits[oi].s;
+          }
+          const optTies = optHits.filter((h) => h.s === optMax);
+          optTies.sort((a, b) => {
+            try {
+              const ra = a.btn.getBoundingClientRect();
+              const rb = b.btn.getBoundingClientRect();
+              if (Math.abs(ra.top - rb.top) > 2) return ra.top - rb.top;
+              return ra.left - rb.left;
+            } catch (_e2) {
+              return 0;
+            }
+          });
+          const bestOpt = optTies[0].btn;
+          usedOpt.add(bestOpt);
+
+          const rgb = readOmBadgeRgbTuple(bestCat);
+          if (!rgb) continue;
+          applyObjectMatchingPairTint(bestCat, rgb);
+          applyObjectMatchingPairTint(bestOpt, rgb);
+        }
+      }
+      return;
+    }
+
+    const walkRoot = getObjectMatchingWalkRoot();
+    let allHosts = walkCollectObjectMatchingHosts(walkRoot, 72);
+    let left, right;
+    if (allHosts.length) {
+      const split = classifyObjectMatchingLeftRightRows(allHosts);
+      left = split.left;
+      right = split.right;
+    } else {
+      left = [];
+      right = [];
+    }
+
+    if (!left.length) {
+      left = collectMatchingLikeDropdownRows();
+    }
+    if (!left.length) return;
+
+    const injectHosts = left.concat(right || []);
+    for (let r = 0; r < injectHosts.length; r++) {
+      if (injectHosts[r].host)
+        ensureNetacadHighlightStylesInShadow(injectHosts[r].host);
+    }
+
+    if (right && right.length) {
+      const usedL = new Set();
+      const usedR = new Set();
+      for (const pair of pairs) {
+        const lHits = [];
+        for (const row of left) {
+          if (usedL.has(row)) continue;
+          const catRaw = objectMatchingRowTitlePlain(row.wrapper);
+          const s = mcqOptionPairExactMatchScore(catRaw, pair.category);
+          if (s >= OM_CATEGORY_MATCH_MIN) lHits.push({ row, s });
+        }
+        if (!lHits.length) continue;
+        let lMax = 0;
+        for (const h of lHits) if (h.s > lMax) lMax = h.s;
+        const lTies = lHits.filter((h) => h.s === lMax);
+        lTies.sort((a, b) => {
+          try {
+            const ra = a.row.wrapper.getBoundingClientRect();
+            const rb = b.row.wrapper.getBoundingClientRect();
+            if (Math.abs(ra.top - rb.top) > 2) return ra.top - rb.top;
+            return ra.left - rb.left;
+          } catch (_e) {
+            return 0;
+          }
+        });
+        const bestL = lTies[0].row;
+        usedL.add(bestL);
+
+        const rHits = [];
+        for (const row of right) {
+          if (usedR.has(row)) continue;
+          const optRaw = objectMatchingRowTitlePlain(row.wrapper);
+          const s = optionTextMatchScoreMcq(optRaw, pair.answer);
+          if (s >= MCQ_DOM_OPTION_MATCH_MIN) rHits.push({ row, s });
+        }
+        if (!rHits.length) continue;
+        let rMax = 0;
+        for (const h of rHits) if (h.s > rMax) rMax = h.s;
+        const rTies = rHits.filter((h) => h.s === rMax);
+        rTies.sort((a, b) => {
+          try {
+            const ra = a.row.wrapper.getBoundingClientRect();
+            const rb = b.row.wrapper.getBoundingClientRect();
+            if (Math.abs(ra.top - rb.top) > 2) return ra.top - rb.top;
+            return ra.left - rb.left;
+          } catch (_e2) {
+            return 0;
+          }
+        });
+        const bestR = rTies[0].row;
+        usedR.add(bestR);
+
+        const rgb = readOmBadgeRgbTuple(bestL.wrapper);
+        if (!rgb) continue;
+        applyObjectMatchingPairTint(bestL.wrapper, rgb);
+        applyObjectMatchingPairTint(bestR.wrapper, rgb);
+      }
+    }
+
+    lastEntryForMatchingDdRehint = entry;
+    installMatchingDropdownHintObservers(left);
+    applyMatchingDropdownHintsForLeftRows(left, pairs);
+
+    for (let i = 0; i < left.length; i++) {
+      syncMatchingDropdownRowOutline(left[i].wrapper, left[i].host);
+    }
+  }
+
+  /** MCQ 正确项页面高亮 */
+  function applyMcqCorrectOptionHighlights(entry) {
+    clearAllMcqCorrectHighlights();
+    if (!entry) {
+      return;
+    }
+    const ctx = resolveMcqDomHighlightContext(entry);
+    if (!ctx) return;
+    if (ctx.domRows[0] && ctx.domRows[0].el)
+      ensureNetacadHighlightStylesInShadow(ctx.domRows[0].el);
+    const seenHost = new WeakSet();
+    const rawOptsHl = Array.isArray(entry.选项) ? entry.选项 : [];
+    for (const j of ctx.correctIdx) {
+      const i =
+        ctx.jToDomI[j] != null
+          ? ctx.jToDomI[j]
+          : (() => {
+              for (let di = 0; di < ctx.mapDj.length; di++) {
+                if (ctx.mapDj[di] === j) return di;
+              }
+              return -1;
+            })();
+      if (i < 0 || !ctx.domRows[i]) continue;
+      const jsonPlainJ = String(rawOptsHl[j] || "")
+        .replace(/\s*（正确答案）\s*$/, "")
+        .trim();
+      const rowT = String(ctx.domRows[i].text || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const score = jsonPlainJ
+        ? optionTextMatchScoreMcq(rowT, jsonPlainJ)
+        : 0;
+      if (!jsonPlainJ || score < MCQ_DOM_OPTION_MATCH_MIN) continue;
+      const inner = ctx.domRows[i].el;
+      if (!inner || isInOurPanel(inner)) continue;
+      if (isMcqOptionRowSiteSelected(inner)) continue;
+      const host = resolveMcqItemHostForHighlight(inner);
+      if (!host || isInOurPanel(host) || seenHost.has(host)) continue;
+      seenHost.add(host);
+      host.classList.add(MCQ_CORRECT_HINT_CLASS);
+    }
+  }
+
+  /** findBestMcq 平局加权 */
   function sectionAnchorBonus(row, normView, outlineRef) {
     let b = 0;
     const ut = row.entry.所属单元?.标题;
@@ -1687,16 +4526,29 @@
     return b;
   }
 
-  function findBestMcqCore(mcqs, pageText, outlineRef) {
+  /** 题干 exact 选题 */
+  function findBestMcqCore(mcqs, pageText, outlineRef, ipv4StrictStem) {
+    if (!mcqs || !mcqs.length) return null;
     const normView = normalizeForMatch(pageText);
-    if (!normView || normView.length < 15) return null;
-    const normViewRel = relaxForMatch(pageText);
+    if (!normView || normView.length < 8) return null;
+    const ipv4Gate =
+      ipv4StrictStem != null && String(ipv4StrictStem).trim().length >= 12
+        ? ipv4StrictStem
+        : pageText;
+
+    const stemSrc =
+      ipv4StrictStem != null && String(ipv4StrictStem).trim().length >= 8
+        ? ipv4StrictStem
+        : pageText;
+    const viewKey = stemUnifiedExactKeyFromVisibleStem(stemSrc);
 
     let best = null;
     let bestScore = 0;
     let bestBonus = -1;
 
     const consider = (row, baseScore) => {
+      const q = row.entry.问题 || "";
+      if (!stemIpv4CidrTokensAlign(ipv4Gate, q)) return;
       const bonus = sectionAnchorBonus(row, normView, outlineRef);
       if (
         baseScore > bestScore ||
@@ -1710,66 +4562,100 @@
 
     for (const row of mcqs) {
       const q = row.entry.问题 || "";
-      let nq = normalizeForMatch(q);
-      if (nq.length < 10) continue;
-      const nqRel = relaxForMatch(q);
-
-      if (normView.includes(nq)) {
-        consider(row, nq.length);
-        continue;
-      }
-
-      if (normViewRel.includes(nqRel) && nqRel.length >= 10) {
-        consider(row, nqRel.length);
-        continue;
-      }
-
-      // 题干在 JSON 里可能无 问题 n：前缀，页面有；试去掉前缀再比
-      const stripped = normView
-        .replace(/问题\s*\d+\s*[:：]\s*/gi, " ")
-        .replace(/\bquestion\s*\d+\s*[:.]\s*/gi, " ");
-      if (stripped.includes(nq)) {
-        consider(row, nq.length);
-        continue;
-      }
-
-      const strippedRel = relaxForMatch(
-        pageText
-          .replace(/问题\s*\d+\s*[:：]\s*/gi, " ")
-          .replace(/\bquestion\s*\d+\s*[:.]\s*/gi, " ")
-      );
-      if (strippedRel.includes(nqRel) && nqRel.length >= 10) {
-        consider(row, nqRel.length);
-        continue;
-      }
-
-      const headLen = Math.min(72, nq.length);
-      const head = nq.slice(0, headLen);
-      if (head.length >= 10 && normView.includes(head)) {
-        consider(row, head.length);
-        continue;
-      }
-
-      const headRel = nqRel.slice(0, Math.min(72, nqRel.length));
-      if (headRel.length >= 10 && normViewRel.includes(headRel)) {
-        consider(row, headRel.length);
+      const bankKey = stemUnifiedExactKeyFromQuestionHtml(q);
+      if (!bankKey) continue;
+      if (viewKey && viewKey === bankKey) {
+        consider(row, bankKey.length);
       }
     }
     return best;
   }
 
-  function findBestMcq(mcqs, pageText, outlineRef, visibleStem) {
-    const vs = visibleStem && String(visibleStem).trim();
-    if (vs && vs.length >= 12) {
-      const narrowed = mcqs.filter((row) =>
-        visibleStemMatchesQuestion(vs, row.entry.问题 || "")
-      );
-      if (narrowed.length === 1) return narrowed[0];
-      if (narrowed.length > 1) return findBestMcqCore(narrowed, pageText, outlineRef);
-      const biased = `${vs}\n\n${pageText}`;
-      return findBestMcqCore(mcqs, biased, outlineRef);
+  /** 按 MAC 在 pool 中锁定行 */
+  function findMcqRowByMacLikeInPool(visibleStem, pool) {
+    const macs = extractMacLikeTokensFromStem(visibleStem);
+    if (macs.length < 1 || !pool || !pool.length) return null;
+    const hits = [];
+    for (const row of pool) {
+      const nq = normalizeQuestionHtmlForMatch(row.entry?.问题 || "");
+      if (!nq || nq.length < 12) continue;
+      if (macs.every((tok) => nq.includes(tok))) hits.push(row);
     }
-    return findBestMcqCore(mcqs, pageText, outlineRef);
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1)
+      return pickStemAmbiguousRow(hits, pool, null, visibleStem);
+    return null;
+  }
+
+  /** 题干多匹配时用题号决胜 */
+  function pickStemAmbiguousRow(narrowed, fullPool, ordinalHint, visibleStem) {
+    if (!narrowed || !narrowed.length) return null;
+    if (narrowed.length === 1) return narrowed[0];
+    const rawStem = visibleStem && String(visibleStem).trim();
+    const stemOk =
+      rawStem && stripQuizAccessibilityStemNoise(rawStem).length >= 8;
+    if (stemOk) {
+      const exactHits = narrowed.filter((row) =>
+        visibleStemMatchesQuestion(visibleStem, row.entry?.问题 || "")
+      );
+      if (exactHits.length === 1) return exactHits[0];
+    }
+    const n = parseInt(String(ordinalHint), 10);
+    if (Number.isFinite(n) && n >= 1) {
+      const want = n - 1;
+      const exact = narrowed.find((row) => fullPool.indexOf(row) === want);
+      if (exact) return exact;
+      let best = narrowed[0];
+      let bestD = Infinity;
+      for (const row of narrowed) {
+        const i = fullPool.indexOf(row);
+        if (i < 0) continue;
+        const d = Math.abs(i - want);
+        if (d < bestD) {
+          bestD = d;
+          best = row;
+        }
+      }
+      return best;
+    }
+    return narrowed[0];
+  }
+
+  /** 题干校正 current */
+  function realignCurrentToVisibleStem(pool, visibleStem, ordinalHint, current) {
+    if (!pool || !pool.length || visibleStem == null) return current;
+    const vsRaw = String(visibleStem).trim();
+    let vs = stripQuizAccessibilityStemNoise(vsRaw);
+    if (vs.length < 6) vs = vsRaw;
+    if (vs.length < 12) return current;
+    if (current != null) {
+      const ok = visibleStemMatchesMcqRow(vs, current);
+      if (ok) return current;
+    }
+    const hits = pool.filter((row) => visibleStemMatchesMcqRow(vs, row));
+    if (hits.length === 0) return current;
+    if (hits.length === 1) return hits[0];
+    return pickStemAmbiguousRow(hits, pool, ordinalHint, visibleStem);
+  }
+
+  function findBestMcq(mcqs, pageText, outlineRef, visibleStem, ordinalHint) {
+    const raw = visibleStem && String(visibleStem).trim();
+    const stripped = raw ? stripQuizAccessibilityStemNoise(raw) : "";
+    const vs =
+      stripped.length >= 6 ? stripped : raw;
+    if (vs && vs.length >= 12) {
+      const narrowed = mcqs.filter((row) => visibleStemMatchesMcqRow(vs, row));
+      if (narrowed.length === 1) return narrowed[0];
+      if (narrowed.length > 1)
+        return pickStemAmbiguousRow(narrowed, mcqs, ordinalHint, vs);
+      const fromStemOnly = findBestMcqCore(mcqs, vs, outlineRef, vs);
+      if (fromStemOnly && visibleStemMatchesMcqRow(vs, fromStemOnly)) {
+        return fromStemOnly;
+      }
+      const biased = `${vs}\n\n${pageText}`;
+      return findBestMcqCore(mcqs, biased, outlineRef, vs);
+    }
+    return findBestMcqCore(mcqs, pageText, outlineRef, null);
   }
 
   /** 从合并正文猜题号 */
@@ -1781,6 +4667,24 @@
       return lastDomQuizQuestionNumber;
     }
     const s = String(pageText || "").replace(/\s+/g, " ");
+    const reZh = /(\d+)\s*的\s*(\d+)\s*问题/g;
+    let zhBest = null;
+    let zm;
+    while ((zm = reZh.exec(s)) !== null) {
+      const cur = parseInt(zm[1], 10);
+      const tot = parseInt(zm[2], 10);
+      if (
+        Number.isFinite(cur) &&
+        Number.isFinite(tot) &&
+        cur > 0 &&
+        tot > 0 &&
+        cur <= tot &&
+        cur < 500 &&
+        tot < 500
+      )
+        zhBest = cur;
+    }
+    if (zhBest != null) return zhBest;
     const patterns = [
       /问题\s*(\d+)/i,
       /\bQ\s*(\d+)/i,
@@ -1804,6 +4708,7 @@
   function ensurePanel() {
     let el = document.getElementById(PANEL_ID);
     if (el) {
+      bindPanelMatchNavOnce(el);
       return el;
     }
     el = document.createElement("div");
@@ -1820,6 +4725,7 @@
       </div>
     `;
     document.documentElement.appendChild(el);
+    bindPanelMatchNavOnce(el);
     syncPanelPositionToSiteFabs();
     const expand = () => {
       el.classList.remove("netacad-ah-collapsed");
@@ -1935,7 +4841,7 @@
     fabLayoutSyncedOnce = true;
   }
 
-  /** 面板 right/bottom 与站点 FAB 对齐 */
+  /** 面板对齐 FAB */
   function applyFabSyncLayout(panel, rightPx, bottomPx) {
     panel.style.right = `${Math.max(0, Math.round(rightPx))}px`;
     panel.style.bottom = `${Math.max(0, Math.round(bottomPx))}px`;
@@ -1971,7 +4877,7 @@
   }
 
   /** 渲染面板主体 */
-  function renderQuizSummary(body, questionLabel, questionStem, answerRaw) {
+  function renderQuizSummary(body, questionLabel, questionStem, answerRaw, matchNav) {
     const qHtml =
       questionLabel && questionLabel !== "—"
         ? escapeHtml(questionLabel)
@@ -1987,14 +4893,236 @@
       stemHtml = st ? escapeHtml(st) : "—";
     }
     const answerBoxHtml = buildAnswerBoxHtml(answerRaw);
-    body.innerHTML = `<div class="netacad-ah-simple">
+    let navRow = "";
+    if (
+      matchNav &&
+      matchNav.total > 1 &&
+      matchNav.index >= 1 &&
+      matchNav.index <= matchNav.total
+    ) {
+      navRow = `<div class="netacad-ah-matchnav-bar" role="group" aria-label="多条答案匹配切换"><span class="netacad-ah-matchnav-lbl">匹配</span><button type="button" class="netacad-ah-match-prev netacad-ah-match-iconbtn" title="上一条" aria-label="上一条匹配">‹</button><span class="netacad-ah-match-pos">${matchNav.index}/${matchNav.total}</span><button type="button" class="netacad-ah-match-next netacad-ah-match-iconbtn" title="下一条" aria-label="下一条匹配">›</button></div>`;
+    }
+    body.innerHTML = `<div class="netacad-ah-simple">${navRow}
       <div class="netacad-ah-simple-row"><span class="netacad-ah-simple-k">题号</span><span class="netacad-ah-simple-v">${qHtml}</span></div>
       <div class="netacad-ah-simple-row netacad-ah-simple-row--stem"><span class="netacad-ah-simple-k">题目</span><span class="netacad-ah-simple-v netacad-ah-simple-stem">${stemHtml}</span></div>
       <div class="netacad-ah-simple-row netacad-ah-simple-row--answer"><span class="netacad-ah-simple-k">答案</span><div class="netacad-ah-simple-v netacad-ah-answer-wrap">${answerBoxHtml}</div></div>
     </div>`;
   }
 
+  const AMB_STEM_HINT_ID = "netacad-ah-amb-stem-hint";
+
+  /** 查找当前测验题标题元素 */
+  function findMcqQuestionTitleHeadingEl() {
+    const deep = querySelectorAllDeep(
+      document,
+      ".mcq__title-inner, .component__title-inner, " +
+        "[class*='mcq__title-inner'], [class*='component__title-inner']",
+      96
+    );
+    const scored = [];
+    for (let i = 0; i < deep.length; i++) {
+      const el = deep[i];
+      if (!el || isInOurPanel(el) || isInCourseChromeSidebar(el)) continue;
+      const area = elementVisibleViewportArea(el);
+      const vis = domElLikelyRenderedForUser(el);
+      if (area < 4 && !vis) continue;
+      const t = cleanMcqTitleInnerText(mcqTitleInnerPlainFromNode(el)) || "";
+      if (t.length < 2 || !/问题|question|Q\b/i.test(t)) continue;
+      let score = area;
+      if (vis) score += 1e6;
+      scored.push({ el, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    if (scored.length) return scored[0].el;
+    for (let j = 0; j < deep.length; j++) {
+      const el = deep[j];
+      if (!el || isInOurPanel(el) || isInCourseChromeSidebar(el)) continue;
+      const area = elementVisibleViewportArea(el);
+      const vis = domElLikelyRenderedForUser(el);
+      if (area < 4 && !vis) continue;
+      scored.push({ el, score: area + (vis ? 1e6 : 0) });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    if (scored.length) return scored[0].el;
+    const hosts = querySelectorAllDeep(document, "mcq-view", 32);
+    for (let hi = 0; hi < hosts.length; hi++) {
+      const h = hosts[hi];
+      if (!h || isInOurPanel(h) || !domElLikelyRenderedForUser(h)) continue;
+      const sr = h.shadowRoot;
+      if (!sr) continue;
+      const inner =
+        sr.querySelector(".mcq__title-inner") ||
+        sr.querySelector(".component__title-inner") ||
+        sr.querySelector("[class*='mcq__title-inner']") ||
+        sr.querySelector("[class*='component__title-inner']");
+      if (inner) return inner;
+    }
+    try {
+      const xr = document.evaluate(
+        "//*[contains(@class,'mcq__title-inner')][contains(.,'问题')][1]",
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null
+      );
+      const n = xr && xr.singleNodeValue;
+      if (
+        n &&
+        n.nodeType === 1 &&
+        !isInOurPanel(n) &&
+        domElLikelyRenderedForUser(n)
+      )
+        return n;
+    } catch (_e) {
+      /* */
+    }
+    return null;
+  }
+
+  function removeAmbiguousStemHint() {
+    try {
+      const found = querySelectorAllDeep(
+        document,
+        '[id="netacad-ah-amb-stem-hint"]',
+        24
+      );
+      for (let i = 0; i < found.length; i++) {
+        try {
+          found[i].remove();
+        } catch (_e) {
+          /* */
+        }
+      }
+    } catch (_e2) {
+      /* */
+    }
+    ambHintMountedParent = null;
+  }
+
+  function ensureAmbiguousStemHintOnPage() {
+    const titleEl = findMcqQuestionTitleHeadingEl();
+    if (!titleEl || !titleEl.parentElement) return;
+    const par = titleEl.parentElement;
+    const hintInlineStyle = [
+      "display:block",
+      "box-sizing:border-box",
+      "width:100%",
+      "max-width:100%",
+      "min-width:0",
+      "margin:0.35rem 0 0.45rem",
+      "padding:0.3rem 0.5rem 0.3rem 0.55rem",
+      'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',
+      "font-size:11px",
+      "font-weight:400",
+      "line-height:1.45",
+      "font-style:normal",
+      "color:#94908c",
+      "background:rgba(248,246,244,0.98)",
+      "border:none",
+      "border-left:3px solid #d4d0ca",
+      "border-radius:0 4px 4px 0",
+      "box-shadow:inset 0 0 0 1px rgba(0,0,0,0.05)",
+    ].join(";");
+    const hintText =
+      '多条答案匹配：请点右下角"答"，在面板里用匹配栏切换比对题干与答案。';
+    const existing = par.querySelector("#" + AMB_STEM_HINT_ID);
+    if (existing) {
+      existing.textContent = hintText;
+      existing.setAttribute("style", hintInlineStyle);
+      ambHintMountedParent = par;
+      return;
+    }
+    removeAmbiguousStemHint();
+    const aside = document.createElement("aside");
+    aside.id = AMB_STEM_HINT_ID;
+    aside.className = "netacad-ah-question-amb-hint";
+    aside.setAttribute("data-netacad-ah-injected", "1");
+    aside.setAttribute("role", "note");
+    aside.setAttribute("aria-label", "答案助手提示");
+    aside.setAttribute("style", hintInlineStyle);
+    aside.textContent = hintText;
+    titleEl.insertAdjacentElement("afterend", aside);
+    ambHintMountedParent = par;
+  }
+
+  function syncMatchCandidateIndexState(hits) {
+    if (!hits || hits.length === 0) {
+      lastMatchCandidateSig = "";
+      matchCandidateIndex = 0;
+      return;
+    }
+    const sig = hits
+      .map((r) => r.index)
+      .filter((ix) => ix != null)
+      .sort((a, b) => a - b)
+      .join(",");
+    if (sig !== lastMatchCandidateSig) {
+      lastMatchCandidateSig = sig;
+      matchCandidateIndex = 0;
+    }
+    if (matchCandidateIndex >= hits.length) matchCandidateIndex = 0;
+  }
+
+  function applyMatchNavDelta(delta) {
+    tickRunGeneration++;
+    matchNavInteractionUntil = Date.now() + 2200;
+    const hits = lastAmbiguousHitsForNav;
+    const total = hits.length;
+    if (total <= 1) return;
+    matchCandidateIndex = (matchCandidateIndex + delta + total) % total;
+    const st = lastTickPanelState;
+    if (!st || !st.loaded) {
+      void tick();
+      return;
+    }
+    const row = hits[matchCandidateIndex];
+    let ordFromIndex = st.mcqOrdinal;
+    if (lastMcqsFullListForNav.length && row && row.index != null) {
+      const ix = lastMcqsFullListForNav.findIndex((r) => r.index === row.index);
+      if (ix >= 0) ordFromIndex = ix + 1;
+    }
+    const next = Object.assign({}, st, {
+      current: row,
+      matchNav: { index: matchCandidateIndex + 1, total: total },
+      mcqOrdinal: ordFromIndex,
+      componentIndex: row && row.index != null ? row.index : null,
+      answerGrabbed: !!(
+        row &&
+        row.entry &&
+        String(row.entry.正确答案 || "").trim()
+      ),
+    });
+    if (row && row.entry) {
+      applyMcqCorrectOptionHighlights(row.entry);
+      applyObjectMatchingHighlights(row.entry);
+    } else {
+      clearAllMcqCorrectHighlights();
+      clearObjectMatchingHighlights();
+    }
+    renderPanel(next);
+    lastTickPanelState = next;
+  }
+
+  function bindPanelMatchNavOnce(panelEl) {
+    if (panelMatchNavClickBound || !panelEl) return;
+    panelMatchNavClickBound = true;
+    panelEl.addEventListener("click", (ev) => {
+      const t = ev.target;
+      if (!t || !t.closest) return;
+      const btn = t.closest(".netacad-ah-match-prev, .netacad-ah-match-next");
+      if (!btn || !btn.closest("#" + PANEL_ID)) return;
+      ev.preventDefault();
+      if (panelMatchNavTotal <= 1) return;
+      if (btn.classList.contains("netacad-ah-match-prev")) applyMatchNavDelta(-1);
+      else applyMatchNavDelta(1);
+    });
+  }
+
   function resolveQuestionStemForPanel(state) {
+    const multiMatch =
+      state.matchNav &&
+      typeof state.matchNav.total === "number" &&
+      state.matchNav.total > 1;
     if (state.current && state.current.entry) {
       const raw = state.current.entry.问题;
       const plain =
@@ -2003,9 +5131,29 @@
           .replace(/<[^>]+>/g, " ")
           .replace(/\s+/g, " ")
           .trim();
-      return plain || null;
+      if (plain) return plain;
     }
-    const vis = getVisibleMcqStemText();
+    if (multiMatch) {
+      const ord =
+        state.mcqOrdinal != null && Number.isFinite(Number(state.mcqOrdinal))
+          ? String(state.mcqOrdinal)
+          : null;
+      const comp =
+        state.componentIndex != null && Number.isFinite(Number(state.componentIndex))
+          ? String(state.componentIndex)
+          : null;
+      if (ord)
+        return `（题库第 ${ord} 题：题干在 JSON 中为空或无法解析，请用 ‹ › 切换条目对照答案。）`;
+      if (comp)
+        return `（components 索引 ${comp}：题干未解析，请用 ‹ › 切换对照。）`;
+      return "（多条答案匹配：请在面板里用匹配栏切换，对照各条目答案。）";
+    }
+    let domStem = "";
+    if (state.visibleDomStem != null) {
+      domStem = String(state.visibleDomStem).replace(/\s+/g, " ").trim();
+    }
+    if (domStem) return domStem;
+    const vis = getVisibleMcqStemText(state.visibleMcqOrdinal);
     if (vis) return vis;
     if (lastDomStemBlob && String(lastDomStemBlob).trim()) {
       const first = String(lastDomStemBlob).split(/\n\n+/)[0].trim();
@@ -2052,7 +5200,6 @@
       return;
     }
 
-    /* quizInactive：清空展示 */
     if (state.quizInactive) {
       renderQuizSummary(body, null, null, null);
       updateFabTooltip(null, null);
@@ -2065,7 +5212,7 @@
         : resolveVisibleMcqOrdinal();
     const qLabel = domOrd != null ? domOrd : "—";
 
-    /* 无题序则不展示题干答案 */
+    // 无题号不显示题干
     if (domOrd == null) {
       renderQuizSummary(body, "—", null, null);
       updateFabTooltip(null, null);
@@ -2083,12 +5230,14 @@
         e.正确答案 != null && String(e.正确答案).trim()
           ? String(e.正确答案).trim()
           : null;
-      renderQuizSummary(body, qLabel, stem, labeled || fallback);
+      const answerRaw =
+        buildPanelAnswerDisplay(e) || labeled || fallback;
+      renderQuizSummary(body, qLabel, stem, answerRaw, state.matchNav || null);
       updateFabTooltip(qLabel, stem);
       return;
     }
 
-    renderQuizSummary(body, qLabel, stem, null);
+    renderQuizSummary(body, qLabel, stem, null, state.matchNav || null);
     updateFabTooltip(qLabel, stem);
   }
 
@@ -2147,13 +5296,24 @@ async function refreshSettings() {
 
   /** 休眠 UI */
   function applyDormantQuizUi(panel) {
+    lastTickPanelState = null;
+    removeAmbiguousStemHint();
+    panelMatchNavTotal = 0;
+    clearAllMcqCorrectHighlights();
+    clearObjectMatchingHighlights();
     panel.classList.add("netacad-ah-dormant");
     const pageText = getQuizPageTextForMatch();
-    const eff = getEffectiveModel();
+    let ph = null;
+    if (model != null && Number.isFinite(model)) ph = model;
+    else if (hasUsableNetacadPathCapture()) ph = resolvePlaceholderFromCapture();
+    else {
+      const seg = getDomInferredCourseSegment();
+      if (seg != null) ph = moduleNumberForPlaceholder(seg);
+    }
     let mcqCount = 0;
-    if (components && eff != null && !Number.isNaN(eff)) {
+    if (components && ph != null && !Number.isNaN(ph)) {
       try {
-        mcqCount = buildAllMcqEntries(components, model ?? eff).length;
+        mcqCount = buildAllMcqEntries(components, ph).length;
       } catch (_e) {
         mcqCount = 0;
       }
@@ -2161,15 +5321,15 @@ async function refreshSettings() {
     renderPanel({
       loaded: true,
       quizInactive: true,
-      model: eff != null && !Number.isNaN(eff) ? eff : null,
+      model: ph != null && !Number.isNaN(ph) ? ph : null,
       contentBase: getContentBase(),
-      pathHint: settings.netacadContentBase ? "网络" : "默认",
+      pathHint: pathHintFromSettings(),
       mcqCount,
       current: null,
       error: null,
       needModel: false,
       modelSource:
-        eff != null && !Number.isNaN(eff) ? modelSourceLabel(eff) : "—",
+        ph != null && !Number.isNaN(ph) ? modelSourceLabel(ph) : "—",
       pageQuestionNumber: extractPageQuestionNumber(pageText),
       mcqOrdinal: null,
       componentIndex: null,
@@ -2178,18 +5338,12 @@ async function refreshSettings() {
   }
 
   async function tick() {
+    const myId = ++tickRunGeneration;
     await refreshSettings();
+    if (myId !== tickRunGeneration) return;
     const panel = ensurePanel();
     try {
-      if (looksLikeSubmittedOrResultUi()) {
-        applyDormantQuizUi(panel);
-        return;
-      }
       if (!isLikelyQuizPage()) {
-        applyDormantQuizUi(panel);
-        return;
-      }
-      if (isMcqResultSummaryView()) {
         applyDormantQuizUi(panel);
         return;
       }
@@ -2200,43 +5354,82 @@ async function refreshSettings() {
       panel.classList.remove("netacad-ah-dormant");
 
       const contentBase = getContentBase();
-      const eff = getEffectiveModel();
 
-      if (eff == null || Number.isNaN(eff)) {
+      if (!canResolveComponentsTarget()) {
+        lastTickPanelState = null;
+        removeAmbiguousStemHint();
+        panelMatchNavTotal = 0;
+        clearAllMcqCorrectHighlights();
+        clearObjectMatchingHighlights();
         renderPanel({
           loaded: false,
           needModel: true,
           error: null,
           contentBase,
-          pathHint: settings.netacadContentBase ? "网络" : "默认（进课节加载后更新）",
+          pathHint: pathHintFromSettings() === "网络"
+            ? "网络"
+            : "默认（进课节加载后更新）",
         });
         return;
       }
 
       const loc = getLocale();
-      const loadKey = `${contentBase}|${eff}|${loc}`;
+      let loadKey;
+      let componentsUrlToFetch;
+      let placeholderMod;
+      if (hasUsableNetacadPathCapture()) {
+        const p = String(settings.netacadComponentsBasePath || "").replace(
+          /\/+$/,
+          ""
+        );
+        componentsUrlToFetch = absoluteComponentsUrlFromStoredPath();
+        loadKey = `abs:${p}|${componentsUrlToFetch}`;
+        placeholderMod = resolvePlaceholderFromCapture();
+      } else {
+        const courseSeg = getDomInferredCourseSegment();
+        componentsUrlToFetch = componentsUrl(courseSeg, contentBase, loc);
+        loadKey = `${contentBase}|${courseSeg}|${loc}`;
+        placeholderMod = moduleNumberForPlaceholder(courseSeg);
+      }
+
       if (loadKey !== loadedKey || !components) {
         if (loadInProgress) return;
         loadInProgress = true;
+        lastTickPanelState = null;
+        removeAmbiguousStemHint();
+        panelMatchNavTotal = 0;
+        clearAllMcqCorrectHighlights();
+        clearObjectMatchingHighlights();
         renderPanel({
           loaded: false,
           needModel: false,
           error: null,
           contentBase,
-          pathHint: settings.netacadContentBase ? "网络" : "默认（进课节加载后更新）",
+          pathHint: pathHintFromSettings() === "网络"
+            ? "网络"
+            : "默认（进课节加载后更新）",
         });
         try {
-          components = await loadComponents(eff, contentBase, loc);
+          components = await fetchComponentsAtUrl(componentsUrlToFetch);
+          if (myId !== tickRunGeneration) {
+            loadInProgress = false;
+            return;
+          }
           loadedKey = loadKey;
-          model = eff;
+          model = placeholderMod;
         } catch (e) {
           components = null;
           loadedKey = null;
+          lastTickPanelState = null;
+          removeAmbiguousStemHint();
+          panelMatchNavTotal = 0;
+          clearAllMcqCorrectHighlights();
+          clearObjectMatchingHighlights();
           renderPanel({
             error: String(e.message || e),
             loaded: false,
             contentBase,
-            pathHint: settings.netacadContentBase ? "网络" : "默认",
+            pathHint: pathHintFromSettings() === "网络" ? "网络" : "默认",
           });
           loadInProgress = false;
           return;
@@ -2247,10 +5440,14 @@ async function refreshSettings() {
       const mcqs = buildAllMcqEntries(components, model);
       const { list: scopeMcqs, didFilter: outlineMcqScopeOk } =
         filterMcqsByOutlineRef(mcqs, lastDomOutlineRef);
+      const pool = outlineMcqScopeOk ? scopeMcqs : mcqs;
       const pageText = getQuizPageTextForMatch();
-      const visibleStem = getVisibleMcqStemText();
       const ordCtx = resolveMcqOrdinalContext();
       let visibleMcqOrdinal = ordCtx.ordinal;
+      const pageQuestionNumber = extractPageQuestionNumber(pageText);
+      if (visibleMcqOrdinal == null && pageQuestionNumber != null) {
+        visibleMcqOrdinal = String(pageQuestionNumber);
+      }
       if (
         outlineMcqScopeOk &&
         visibleMcqOrdinal != null &&
@@ -2261,69 +5458,214 @@ async function refreshSettings() {
           visibleMcqOrdinal = null;
         }
       }
-      const pageQuestionNumber = extractPageQuestionNumber(pageText);
+      const visibleStem = getVisibleMcqStemText(visibleMcqOrdinal);
+      const byDomId =
+        visibleMcqOrdinal != null
+          ? findPoolRowByComponentDomId(String(visibleMcqOrdinal), pool)
+          : null;
+
       let current = null;
-      let useDirectIndex = false;
-      if (visibleMcqOrdinal != null) {
+      if (byDomId) {
+        current = byDomId;
+      } else if (visibleMcqOrdinal != null) {
         const n = parseInt(visibleMcqOrdinal, 10);
-        const pool = outlineMcqScopeOk ? scopeMcqs : mcqs;
-        useDirectIndex =
-          outlineMcqScopeOk &&
-          Number.isFinite(n) &&
-          n >= 1 &&
-          n <= scopeMcqs.length;
-        if (useDirectIndex) {
-          current = scopeMcqs[n - 1];
+        const vsRaw = visibleStem && String(visibleStem).trim();
+        const vsStripped = vsRaw
+          ? stripQuizAccessibilityStemNoise(vsRaw)
+          : "";
+        const vs = vsStripped.length >= 6 ? vsStripped : vsRaw;
+        const stemStrong = vs && vs.length >= 12;
+        const byOrd =
+          Number.isFinite(n) && n >= 1 && n <= pool.length
+            ? pool[n - 1]
+            : null;
+        // 题干优先于题号行
+        const macRow = stemStrong
+          ? findMcqRowByMacLikeInPool(vsRaw, pool)
+          : null;
+        const byStem = stemStrong
+          ? macRow ||
+            findBestMcq(pool, pageText, lastDomOutlineRef, visibleStem, n)
+          : null;
+
+        if (byOrd && stemStrong) {
+          const ordOk = visibleStemMatchesMcqRow(vs, byOrd);
+          const stemOk = byStem && visibleStemMatchesMcqRow(vs, byStem);
+          if (!ordOk && stemOk) {
+            current = byStem;
+          } else if (ordOk && !stemOk) {
+            current = byOrd;
+          } else if (ordOk && stemOk && byStem && byStem !== byOrd) {
+            const narrowed = pool.filter((row) =>
+              visibleStemMatchesMcqRow(vs, row)
+            );
+            current =
+              narrowed.length === 1
+                ? narrowed[0]
+                : pickStemAmbiguousRow(narrowed, pool, n, vs);
+          } else if (!ordOk && !stemOk) {
+            // 未验证不占位
+            current = null;
+          } else {
+            current = byOrd;
+          }
+        } else if (byOrd) {
+          current = byOrd;
         } else {
           current = findBestMcq(
             pool,
             pageText,
             lastDomOutlineRef,
-            visibleStem
+            visibleStem,
+            n
           );
-          const vs = visibleStem && String(visibleStem).trim();
-          if (
-            outlineMcqScopeOk &&
-            Number.isFinite(n) &&
-            n >= 1 &&
-            n <= scopeMcqs.length &&
-            vs &&
-            vs.length >= 14
-          ) {
-            const byOrd = scopeMcqs[n - 1];
-            const qOrd = byOrd && (byOrd.entry?.问题 || "");
-            const qCur = current && (current.entry?.问题 || "");
-            const matchOrd = visibleStemMatchesQuestion(vs, qOrd);
-            const matchCur = visibleStemMatchesQuestion(vs, qCur);
-            if (matchOrd && !matchCur) current = byOrd;
-            else if (matchOrd && matchCur && current !== byOrd) current = byOrd;
-          }
         }
       }
 
+      if (!byDomId) {
+        current = realignCurrentToVisibleStem(
+          pool,
+          visibleStem,
+          visibleMcqOrdinal,
+          current
+        );
+      }
+
+      const visibleDomStemPanel =
+        visibleStem != null
+          ? (() => {
+              const t = String(visibleStem).trim();
+              const d = stripQuizAccessibilityStemNoise(t);
+              return d.length >= 6 ? d : t;
+            })()
+          : null;
+
+      let ambiguousHits = [];
+      if (
+        !byDomId &&
+        visibleDomStemPanel &&
+        String(visibleDomStemPanel).trim().length >= 12
+      ) {
+        ambiguousHits = pool.filter((row) =>
+          visibleStemMatchesMcqRow(visibleDomStemPanel, row)
+        );
+        ambiguousHits.sort((a, b) => (a.index || 0) - (b.index || 0));
+      }
+      lastAmbiguousHitsForNav = ambiguousHits;
+      lastMcqsFullListForNav = mcqs;
+      syncMatchCandidateIndexState(ambiguousHits);
+      if (byDomId) {
+        panelMatchNavTotal = 0;
+        removeAmbiguousStemHint();
+      } else if (ambiguousHits.length > 1) {
+        panelMatchNavTotal = ambiguousHits.length;
+        current = ambiguousHits[matchCandidateIndex];
+        ensureAmbiguousStemHintOnPage();
+      } else {
+        panelMatchNavTotal = 0;
+        removeAmbiguousStemHint();
+        if (ambiguousHits.length === 1) current = ambiguousHits[0];
+      }
+
+      const matchNavForPanel =
+        !byDomId && ambiguousHits.length > 1
+          ? {
+              index: matchCandidateIndex + 1,
+              total: ambiguousHits.length,
+            }
+          : null;
+
+      /*
+      try {
+        const qPlain =
+          current &&
+          String(current.entry?.问题 || "")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        const aPlain =
+          current &&
+          String(current.entry?.正确答案 || "")
+            .replace(/\s+/g, " ")
+            .trim();
+        const aShow =
+          current && current.entry
+            ? buildPanelAnswerDisplay(current.entry) || aPlain
+            : null;
+        const maxQ = 900;
+        const maxA = 1400;
+        const qBank = qPlain ? qPlain.slice(0, maxQ) : "";
+        const qPageRaw =
+          resolveQuestionStemForPanel({
+            visibleDomStem: visibleDomStemPanel,
+            visibleMcqOrdinal,
+            current,
+          }) || "";
+        const qPage = String(qPageRaw).replace(/\s+/g, " ").trim().slice(0, maxQ);
+        const ans = aShow ? String(aShow).slice(0, maxA) : "";
+        const logLabel = "color:#64748b;font-weight:600";
+        const logBody = "color:inherit";
+        console.groupCollapsed(
+          "%cNetAcad答案助手",
+          "color:#15803d;font-weight:bold"
+        );
+        console.log("%c页面题目：%c%s", logLabel, logBody, qPage || "");
+        console.log(
+          "%c题目：%c%s\n%c答案：%c%s",
+          logLabel,
+          logBody,
+          qBank || "",
+          logLabel,
+          logBody,
+          ans || ""
+        );
+        console.groupEnd();
+      } catch (_e) {}
+      */
+
       const mcqOrdinal =
-        current && mcqs.length ? mcqs.indexOf(current) + 1 : null;
+        current && mcqs.length && current.index != null
+          ? mcqs.findIndex((r) => r.index === current.index) + 1
+          : current && mcqs.length
+            ? mcqs.indexOf(current) + 1
+            : null;
       const answerGrabbed = !!(
         current &&
         current.entry &&
         String(current.entry.正确答案 || "").trim()
       );
-      renderPanel({
+      if (current && current.entry) {
+        applyMcqCorrectOptionHighlights(current.entry);
+        applyObjectMatchingHighlights(current.entry);
+      } else {
+        clearAllMcqCorrectHighlights();
+        clearObjectMatchingHighlights();
+      }
+      const panelState = {
         loaded: true,
         model,
         contentBase,
-        pathHint: settings.netacadContentBase ? "网络" : "默认（未抓到请求时用 itn/1.0）",
+        pathHint:
+          pathHintFromSettings() === "网络"
+            ? "网络"
+            : "默认（未抓到请求时用 itn/1.0）",
         mcqCount: mcqs.length,
         current,
+        matchNav: matchNavForPanel,
         error: null,
         needModel: false,
         modelSource: modelSourceLabel(model),
         pageQuestionNumber,
         visibleMcqOrdinal,
+        visibleDomStem: visibleDomStemPanel,
         mcqOrdinal,
         componentIndex: current ? current.index : null,
         answerGrabbed,
-      });
+      };
+      if (myId !== tickRunGeneration) return;
+      renderPanel(panelState);
+      if (myId !== tickRunGeneration) return;
+      lastTickPanelState = panelState;
     } finally {
       syncPanelPositionToSiteFabs();
       // 由于DOM可能改变，清除GCBR缓存，下次调用会重新获取
@@ -2457,6 +5799,10 @@ async function refreshSettings() {
       await tick();
       startPolling();
     } catch (e) {
+      removeAmbiguousStemHint();
+      panelMatchNavTotal = 0;
+      clearAllMcqCorrectHighlights();
+      clearObjectMatchingHighlights();
       renderPanel({ error: String(e.message || e), loaded: false });
     }
   }

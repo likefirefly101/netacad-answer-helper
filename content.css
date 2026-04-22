@@ -1,15 +1,14 @@
-/* 与 #fabActionBtn / #webexFabActionBtn 对齐；存在时由 content.js 用 rect 覆盖 bottom/right */
+/* 面板定位：与站点 FAB 对齐 */
 #netacad-answer-helper-panel {
   --sfa-fab-right: 25px;
   --webex-fab-bottom: 30px;
   --assignment-fab-bottom: 90px;
   --fab-vertical-step: calc(
     var(--assignment-fab-bottom) - var(--webex-fab-bottom)
-  ); /* 60px */
+  );
   --answer-fab-bottom: calc(
     var(--assignment-fab-bottom) + var(--fab-vertical-step)
-  ); /* 150px */
-  /* 与 #fabActionBtn / #webexFabActionBtn 一致：48×48 */
+  );
   --answer-fab-size: 48px;
 
   position: fixed;
@@ -44,7 +43,7 @@
   pointer-events: auto;
 }
 
-/* 小圆钮 */
+/* FAB */
 #netacad-answer-helper-panel .netacad-ah-fab {
   display: flex;
   align-items: center;
@@ -76,7 +75,7 @@
   display: none;
 }
 
-/* 展开后的卡片：flex */
+/* 展开卡片 */
 #netacad-answer-helper-panel .netacad-ah-card {
   width: min(360px, calc(100vw - 16px));
   max-width: 100%;
@@ -179,6 +178,88 @@
 
 #netacad-answer-helper-panel .netacad-ah-simple-row--answer {
   align-items: flex-start;
+}
+
+/* 匹配栏 */
+#netacad-answer-helper-panel .netacad-ah-matchnav-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(185, 120, 0, 0.2);
+  border: 1px solid rgba(245, 180, 60, 0.45);
+  line-height: 1.2;
+}
+
+#netacad-answer-helper-panel .netacad-ah-matchnav-lbl {
+  flex: 0 0 auto;
+  margin-right: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fdd663;
+}
+
+#netacad-answer-helper-panel .netacad-ah-match-iconbtn {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #5f6368;
+  border-radius: 4px;
+  background: #3c4043;
+  color: #e8eaed;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#netacad-answer-helper-panel .netacad-ah-match-iconbtn:hover {
+  background: #5f6368;
+}
+
+#netacad-answer-helper-panel .netacad-ah-match-pos {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fdd663;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
+/* 页内多条匹配提示 */
+.netacad-ah-question-amb-hint {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0.35rem 0 0.45rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.55rem;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  line-height: 1.45 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  color: #94908c !important;
+  background: rgba(248, 246, 244, 0.98) !important;
+  border: none !important;
+  border-left: 3px solid #d4d0ca !important;
+  border-radius: 0 4px 4px 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+  vertical-align: baseline;
+  z-index: 2;
+  position: relative;
 }
 
 #netacad-answer-helper-panel .netacad-ah-answer-wrap {
@@ -339,3 +420,112 @@
   color: #9aa0a6;
   margin-top: 8px;
 }
+
+/* MCQ 正确项高亮 */
+label.mcq__item-label.netacad-ah-mcq-correct-hint,
+label.js-item-label.netacad-ah-mcq-correct-hint,
+label[role="listitem"].netacad-ah-mcq-correct-hint,
+.mcq__item.netacad-ah-mcq-correct-hint,
+.js-mcq-item.netacad-ah-mcq-correct-hint,
+button.netacad-ah-mcq-correct-hint {
+  position: relative !important;
+  box-sizing: border-box !important;
+  isolation: isolate;
+}
+label.mcq__item-label.netacad-ah-mcq-correct-hint::after,
+label.js-item-label.netacad-ah-mcq-correct-hint::after,
+label[role="listitem"].netacad-ah-mcq-correct-hint::after,
+.mcq__item.netacad-ah-mcq-correct-hint::after,
+.js-mcq-item.netacad-ah-mcq-correct-hint::after,
+button.netacad-ah-mcq-correct-hint::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit;
+  z-index: 999 !important;
+  pointer-events: none !important;
+  box-sizing: border-box !important;
+  box-shadow: inset 0 0 0 3px #15803d !important;
+  background-color: rgba(34, 197, 94, 0.18) !important;
+}
+
+/* matching 下拉正确项 */
+li.netacad-ah-matching-dd-correct[role="option"],
+li.netacad-ah-matching-dd-correct {
+  position: relative !important;
+  box-sizing: border-box !important;
+  isolation: isolate;
+  border-radius: 8px !important;
+  outline: none !important;
+  list-style: none !important;
+}
+li.netacad-ah-matching-dd-correct[role="option"]::after,
+li.netacad-ah-matching-dd-correct::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  box-sizing: border-box !important;
+  box-shadow: inset 0 0 0 3px #15803d !important;
+  background-color: rgba(34, 197, 94, 0.18) !important;
+}
+li.netacad-ah-matching-dd-correct[role="option"] > *,
+li.netacad-ah-matching-dd-correct > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* matching 下拉 inner 兜底 */
+.dropdown__item-inner.netacad-ah-matching-dd-correct,
+.js-dropdown-list-item-inner.netacad-ah-matching-dd-correct {
+  position: relative !important;
+  isolation: isolate;
+}
+.dropdown__item-inner.netacad-ah-matching-dd-correct::after,
+.js-dropdown-list-item-inner.netacad-ah-matching-dd-correct::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  box-sizing: border-box !important;
+  box-shadow: inset 0 0 0 3px #15803d !important;
+  background-color: rgba(34, 197, 94, 0.18) !important;
+}
+.dropdown__item-inner.netacad-ah-matching-dd-correct > *,
+.js-dropdown-list-item-inner.netacad-ah-matching-dd-correct > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* MCQ 内层去描边 */
+.mcq__item-text-inner.netacad-ah-mcq-correct-hint-inner,
+[class*="mcq__item-text-inner"].netacad-ah-mcq-correct-hint-inner {
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* objectMatching 行高亮兜底 */
+.matching__item-container-options-wrapper.netacad-ah-om-correct {
+  box-sizing: border-box !important;
+  border-radius: 10px !important;
+  outline: 3px solid #15803d !important;
+  outline-offset: 2px !important;
+}
+.matching__item-container-options-wrapper.netacad-ah-om-wrong {
+  box-sizing: border-box !important;
+  border-radius: 10px !important;
+  outline: 3px solid #c2410c !important;
+  outline-offset: 2px !important;
+}
+.matching__item-container-options-wrapper.netacad-ah-om-placeholder {
+  box-sizing: border-box !important;
+  border-radius: 10px !important;
+  outline: 3px solid #2563eb !important;
+  outline-offset: 2px !important;
+}
+
